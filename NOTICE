@@ -1,0 +1,11 @@
+ReCam bundles third-party source under android/third_party:
+
+AndKittyInjector - https://github.com/MJx0/AndKittyInjector
+  Copyright (c) 2023 MJ. MIT License.
+  Vendored at commit 6d55e9fb168722bfe176b3f9dc4c5843676ab557 with one local
+  patch; see android/patches/0001-canUseMemfd-real-args.patch.
+  Full text: android/third_party/AndKittyInjector/LICENSE
+
+XZ Embedded - https://github.com/tukaani-project/xz-embedded
+  Copyright (C) The XZ Embedded authors and contributors. Public domain.
+  Full text: android/third_party/xz-embedded/COPYING

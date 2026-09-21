@@ -1,0 +1,29 @@
+diff --git a/AndKittyInjector/src/Injector/KittyInjector.hpp b/AndKittyInjector/src/Injector/KittyInjector.hpp
+index 4d141de..740a7f4 100644
+--- a/AndKittyInjector/src/Injector/KittyInjector.hpp
++++ b/AndKittyInjector/src/Injector/KittyInjector.hpp
+@@ -116,10 +116,23 @@ private:
+     uintptr_t getJavaVM(inject_elf_info_t &injected);
+     bool callEntryPoint(inject_elf_info_t &injected);
+ 
++    // ReCam local patch - see patches/0001-canUseMemfd-real-args.patch
++    //
++    // Upstream called syscall(syscall_memfd_create_n) with NO arguments, so `name` and
++    // `flags` were whatever the caller happened to leave in x1/x2. That made the probe's
++    // result depend on the register state of the code path that reached it - it passed
++    // or failed depending on what ran before it - and it leaked an fd whenever the
++    // garbage happened to form a valid call.
++    //
++    // Pass real arguments and close what we open.
+     inline bool canUseMemfd()
+     {
+         errno = 0;
+-        return !(syscall(syscall_memfd_create_n) < 0 && errno == ENOSYS);
++        int fd = (int)syscall(syscall_memfd_create_n, "recam_probe", MFD_CLOEXEC);
++        if (fd < 0)
++            return errno != ENOSYS;   // any other errno still means the syscall exists
++        close(fd);
++        return true;
+     }
+ 
+     // preinit callbacks

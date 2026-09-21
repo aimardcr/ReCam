@@ -1,0 +1,6 @@
+# ReCam - SELinux policy delta, in magiskpolicy/ksud statement syntax.
+# Both rules come from kernel AVC denials observed on-device, not from guesswork.
+# Apply:  ksud sepolicy apply /data/local/tmp/recam.rule   Revert: reboot
+
+allow cameraserver cameraserver_tmpfs file execute
+allow ksu cameraserver process ptrace
