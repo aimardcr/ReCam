@@ -10,6 +10,9 @@ build/
 dist/
 *.spec
 
+# release artifacts; they live on the GitHub release page
+release/
+
 # pulled from devices for offline symbol work
 .scratch/
 

@@ -113,6 +113,32 @@ python tools/package.py
 This runs `ndk-build`, folds the six device binaries into the package, and writes
 `dist/ReCam`. `adb` and `ffmpeg` are not bundled and remain PATH dependencies.
 
+## Sources
+
+The console offers five. `adb` handles the transport; `ffmpeg` does any encoding.
+
+| Source | What happens |
+|---|---|
+| Test pattern | Scrolling colour bars with a moving marker |
+| RTMP | ffmpeg listens; publish to the Server and Stream Key shown beside the radio button |
+| Video file | Pushed to `/data/local/tmp/recam_source.mp4` and looped on the device |
+| FFmpeg | A path, a URL, or raw input flags if the text starts with `-` |
+| Camera | Any local capture device, including OBS Virtual Camera |
+
+### Feeding OBS in
+
+**Virtual camera.** In OBS press *Start Virtual Camera*, then pick `OBS Virtual Camera`
+under **Camera** and press Start. Nothing else to configure.
+
+**RTMP.** Select **RTMP** and press Start first, so ffmpeg is listening. Then in OBS go
+to *Settings -> Stream -> Service: Custom* and copy the Server and Stream Key shown
+beside the radio button. The key must match exactly; the listener rejects any other.
+Set *Output -> Encoder -> B-frames* to **0**, because ReCam synthesises timestamps in
+decode order and B-frames would reorder the output.
+
+The virtual camera is less to get wrong. RTMP is worth the extra steps only if you want
+OBS's own encoder settings to reach the device.
+
 ## Command line
 
 The console is a front end for these. They take no arguments.
