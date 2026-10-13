@@ -6,7 +6,7 @@
 
 namespace recam {
 
-// Mirrors what AImage reports, so a semi-planar decoder needs no special case.
+// Describes one decoded plane without imposing a planar or semi-planar layout.
 struct SrcPlane {
     const uint8_t* data        = nullptr;
     int32_t        rowStride   = 0;

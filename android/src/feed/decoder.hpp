@@ -1,4 +1,4 @@
-// Decoding an on-device video file into the ring, via MediaCodec and AImageReader.
+// Decoding video into CPU-readable YUV frames through MediaCodec.
 
 #pragma once
 
@@ -33,6 +33,9 @@ public:
 private:
     bool pump();
     bool pump_stream();
+    bool drain_output(const char* source);
+    bool update_output_format(const char* source);
+    bool describe_frame(SrcFrame* out);
     bool queue_au();
     bool start_codec_from_csd();
     void rewind();

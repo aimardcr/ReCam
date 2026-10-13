@@ -1,8 +1,6 @@
 #include "decoder.hpp"
 #include "h264.hpp"
 
-#include <media/NdkImage.h>
-#include <media/NdkImageReader.h>
 #include <media/NdkMediaCodec.h>
 #include <media/NdkMediaExtractor.h>
 #include <media/NdkMediaFormat.h>
@@ -20,6 +18,11 @@
 namespace recam {
 
 namespace {
+
+constexpr int32_t kColorYuv420Planar           = 19;
+constexpr int32_t kColorYuv420PackedPlanar     = 20;
+constexpr int32_t kColorYuv420SemiPlanar       = 21;
+constexpr int32_t kColorYuv420PackedSemiPlanar = 39;
 
 // libbinder_ndk exports these, but the NDK sysroot has no header for them.
 void start_binder_threadpool_once()
@@ -60,10 +63,17 @@ struct VideoDecoder::Impl {
     int              fd       = -1;
     AMediaExtractor* ex       = nullptr;
     AMediaCodec*     codec    = nullptr;
-    AImageReader*    reader   = nullptr;
-    ANativeWindow*   window   = nullptr;
     bool             inputEos = false;
-    AImage*          held     = nullptr;   // planes handed out by next()
+
+    std::vector<uint8_t> frame;
+    bool                 frameReady = false;
+    bool                 formatSeen = false;
+    bool                 formatReady = false;
+    int32_t              outStride = 0, outSliceHeight = 0;
+    int32_t              outColor = 0;
+    int32_t              cropLeft = 0, cropTop = 0, cropRight = 0, cropBottom = 0;
+    bool                 warnedOutput = false;
+    bool                 warnedLayout = false;
 
     // Stream mode. sock >= 0 means input arrives over the wire, not from `ex`.
     int                  sock  = -1;
@@ -143,15 +153,6 @@ bool VideoDecoder::open(const char* path)
 
     AMediaExtractor_selectTrack(d->ex, track);
 
-    // maxImages 4 matches the ring, so the decoder is never starved by the consumer.
-    if (AImageReader_new(mWidth, mHeight, AIMAGE_FORMAT_YUV_420_888, 4, &d->reader) != AMEDIA_OK ||
-        AImageReader_getWindow(d->reader, &d->window) != AMEDIA_OK || !d->window) {
-        KITTY_LOGE("decoder: could not create the AImageReader surface");
-        AMediaFormat_delete(fmt);
-        close();
-        return false;
-    }
-
     d->codec = AMediaCodec_createDecoderByType(mime);
     if (!d->codec) {
         KITTY_LOGE("decoder: no decoder for %s", mime);
@@ -159,7 +160,7 @@ bool VideoDecoder::open(const char* path)
         close();
         return false;
     }
-    if (AMediaCodec_configure(d->codec, fmt, d->window, nullptr, 0) != AMEDIA_OK ||
+    if (AMediaCodec_configure(d->codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK ||
         AMediaCodec_start(d->codec) != AMEDIA_OK) {
         KITTY_LOGE("decoder: configure/start failed for %s", mime);
         AMediaFormat_delete(fmt);
@@ -178,14 +179,13 @@ void VideoDecoder::close()
     if (!mImpl) return;
     release();
     Impl* d = mImpl;
-    mImpl = nullptr;   // the reader's looper must not see a half-torn-down decoder
+    mImpl = nullptr;
 
     if (d->codec) {
         AMediaCodec_stop(d->codec);
         AMediaCodec_delete(d->codec);
     }
-    if (d->reader) AImageReader_delete(d->reader);   // also releases d->window
-    if (d->ex)      AMediaExtractor_delete(d->ex);
+    if (d->ex) AMediaExtractor_delete(d->ex);
     if (d->fd >= 0)   ::close(d->fd);
     if (d->sock >= 0) ::close(d->sock);
     delete d;
@@ -231,13 +231,6 @@ bool VideoDecoder::start_codec_from_csd()
     mWidth  = info.width;
     mHeight = info.height;
 
-    if (AImageReader_new(mWidth, mHeight, AIMAGE_FORMAT_YUV_420_888, 4, &d->reader) != AMEDIA_OK ||
-        AImageReader_getWindow(d->reader, &d->window) != AMEDIA_OK || !d->window) {
-        KITTY_LOGE("decoder: could not create the AImageReader surface");
-        d->ended = true;
-        return false;
-    }
-
     // csd-0 and csd-1 must carry their start codes; MediaCodec expects Annex-B.
     static const uint8_t kStart[4] = { 0, 0, 0, 1 };
     std::vector<uint8_t> csd0(kStart, kStart + 4), csd1(kStart, kStart + 4);
@@ -255,7 +248,7 @@ bool VideoDecoder::start_codec_from_csd()
 
     d->codec = AMediaCodec_createDecoderByType("video/avc");
     if (!d->codec ||
-        AMediaCodec_configure(d->codec, fmt, d->window, nullptr, 0) != AMEDIA_OK ||
+        AMediaCodec_configure(d->codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK ||
         AMediaCodec_start(d->codec) != AMEDIA_OK) {
         KITTY_LOGE("decoder: could not start a decoder for the stream");
         AMediaFormat_delete(fmt);
@@ -363,16 +356,7 @@ bool VideoDecoder::pump_stream()
 
     if (!d->started) return false;
 
-    AMediaCodecBufferInfo info{};
-    const ssize_t out = AMediaCodec_dequeueOutputBuffer(d->codec, &info, 2000);
-    if (out >= 0) {
-        AMediaCodec_releaseOutputBuffer(d->codec, out, true);
-        d->qOut++;
-    } else if (out == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
-        AMediaFormat* of = AMediaCodec_getOutputFormat(d->codec);
-        KITTY_LOGI("decoder: stream output format %s", AMediaFormat_toString(of));
-        AMediaFormat_delete(of);
-    }
+    const bool gotFrame = drain_output("stream");
 
     const uint64_t nowNs = mono_ns();
     if (nowNs - d->lastStatNs > 5ull * 1000 * 1000 * 1000) {
@@ -382,7 +366,7 @@ bool VideoDecoder::pump_stream()
                    static_cast<unsigned long long>(d->qOut),
                    static_cast<unsigned long long>(d->qImg), d->buf.size());
     }
-    return out >= 0;
+    return gotFrame;
 }
 
 void VideoDecoder::rewind()
@@ -393,7 +377,7 @@ void VideoDecoder::rewind()
     d->inputEos = false;
 }
 
-// Feed one input buffer and drain one output buffer, rendering it into the reader.
+// Feed one input buffer and copy one decoded output frame.
 bool VideoDecoder::pump()
 {
     Impl* d = mImpl;
@@ -417,13 +401,163 @@ bool VideoDecoder::pump()
         }
     }
 
+    return drain_output("file");
+}
+
+bool VideoDecoder::update_output_format(const char* source)
+{
+    Impl* d = mImpl;
+    AMediaFormat* fmt = AMediaCodec_getOutputFormat(d->codec);
+    if (!fmt) return false;
+
+    int32_t width = mWidth, height = mHeight, stride = 0, sliceHeight = 0, color = 0;
+    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, &width);
+    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, &height);
+    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_STRIDE, &stride);
+    AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_SLICE_HEIGHT, &sliceHeight);
+    const bool haveColor = AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, &color);
+
+    if (stride <= 0) stride = width;
+    if (sliceHeight <= 0) sliceHeight = height;
+
+    int32_t left = 0, top = 0, right = width - 1, bottom = height - 1;
+    int32_t cropLeft, cropTop, cropRight, cropBottom;
+    if (AMediaFormat_getInt32(fmt, "crop-left", &cropLeft) &&
+        AMediaFormat_getInt32(fmt, "crop-top", &cropTop) &&
+        AMediaFormat_getInt32(fmt, "crop-right", &cropRight) &&
+        AMediaFormat_getInt32(fmt, "crop-bottom", &cropBottom)) {
+        left = cropLeft;
+        top = cropTop;
+        right = cropRight;
+        bottom = cropBottom;
+    } else {
+        AMediaFormat_getRect(fmt, AMEDIAFORMAT_KEY_DISPLAY_CROP,
+                             &left, &top, &right, &bottom);
+    }
+
+    d->outStride = stride;
+    d->outSliceHeight = sliceHeight;
+    d->outColor = color;
+    d->cropLeft = left;
+    d->cropTop = top;
+    d->cropRight = right;
+    d->cropBottom = bottom;
+
+    const int32_t visibleWidth = right - left + 1;
+    const int32_t visibleHeight = bottom - top + 1;
+    d->formatSeen = true;
+    d->formatReady = haveColor && width >= 2 && height >= 2 && stride >= width &&
+                     sliceHeight >= height && stride % 2 == 0 &&
+                     sliceHeight % 2 == 0 && left >= 0 && top >= 0 &&
+                     right >= left && bottom >= top && right < stride &&
+                     bottom < sliceHeight && visibleWidth % 2 == 0 &&
+                     visibleHeight % 2 == 0 && left % 2 == 0 && top % 2 == 0;
+
+    KITTY_LOGI("decoder: %s output color=%d coded=%dx%d stride=%d slice=%d crop=%d,%d-%d,%d",
+               source, color, width, height, stride, sliceHeight,
+               left, top, right, bottom);
+    if (!d->formatReady)
+        KITTY_LOGE("decoder: %s output layout is incomplete or invalid (%s)",
+                   source, AMediaFormat_toString(fmt));
+
+    AMediaFormat_delete(fmt);
+    return d->formatReady;
+}
+
+bool VideoDecoder::drain_output(const char* source)
+{
+    Impl* d = mImpl;
     AMediaCodecBufferInfo info{};
     const ssize_t out = AMediaCodec_dequeueOutputBuffer(d->codec, &info, 2000);
-    if (out >= 0) {
-        AMediaCodec_releaseOutputBuffer(d->codec, out, true);
-        return true;
+    if (out == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+        update_output_format(source);
+        return false;
     }
-    return false;
+    if (out < 0) return false;
+
+    if (!d->formatSeen) update_output_format(source);
+
+    size_t bytes = 0;
+    uint8_t* data = AMediaCodec_getOutputBuffer(d->codec, static_cast<size_t>(out), &bytes);
+    const size_t offset = info.offset >= 0 ? static_cast<size_t>(info.offset) : bytes;
+    const size_t size = info.size > 0 ? static_cast<size_t>(info.size) : 0;
+    const bool validRange = data && offset <= bytes && size > 0 && size <= bytes - offset;
+    bool copied = false;
+    if (validRange) {
+        d->frame.assign(data + offset, data + offset + size);
+        d->frameReady = true;
+        copied = true;
+    } else if (!d->warnedOutput) {
+        d->warnedOutput = true;
+        KITTY_LOGE("decoder: %s returned an invalid output range (%d+%d of %zu)",
+                   source, info.offset, info.size, bytes);
+    }
+
+    AMediaCodec_releaseOutputBuffer(d->codec, static_cast<size_t>(out), false);
+    d->qOut++;
+    return copied;
+}
+
+bool VideoDecoder::describe_frame(SrcFrame* out)
+{
+    Impl* d = mImpl;
+    if (!d->frameReady || !d->formatReady) return false;
+
+    const int32_t width = d->cropRight - d->cropLeft + 1;
+    const int32_t height = d->cropBottom - d->cropTop + 1;
+    const int32_t stride = d->outStride;
+    const int32_t sliceHeight = d->outSliceHeight;
+    const size_t yBytes = static_cast<size_t>(stride) * sliceHeight;
+    size_t required = 0;
+    size_t cbOffset = 0, crOffset = 0;
+    int32_t chromaStride = 0, chromaPixelStride = 0;
+
+    if (d->outColor == kColorYuv420Planar ||
+        d->outColor == kColorYuv420PackedPlanar) {
+        chromaStride = stride / 2;
+        chromaPixelStride = 1;
+        const size_t chromaBytes = static_cast<size_t>(chromaStride) * (sliceHeight / 2);
+        required = yBytes + chromaBytes * 2;
+        const size_t cropOffset = static_cast<size_t>(d->cropTop / 2) * chromaStride +
+                                  d->cropLeft / 2;
+        cbOffset = yBytes + cropOffset;
+        crOffset = yBytes + chromaBytes + cropOffset;
+    } else if (d->outColor == kColorYuv420SemiPlanar ||
+               d->outColor == kColorYuv420PackedSemiPlanar) {
+        chromaStride = stride;
+        chromaPixelStride = 2;
+        required = yBytes + static_cast<size_t>(stride) * (sliceHeight / 2);
+        const size_t cropOffset = static_cast<size_t>(d->cropTop / 2) * stride +
+                                  d->cropLeft;
+        cbOffset = yBytes + cropOffset;
+        crOffset = cbOffset + 1;
+    } else {
+        if (!d->warnedLayout) {
+            d->warnedLayout = true;
+            KITTY_LOGE("decoder: unsupported bytebuffer color format %d", d->outColor);
+        }
+        return false;
+    }
+
+    if (d->frame.size() < required) {
+        if (!d->warnedLayout) {
+            d->warnedLayout = true;
+            KITTY_LOGE("decoder: output frame is %zu bytes, layout needs %zu",
+                       d->frame.size(), required);
+        }
+        return false;
+    }
+
+    const uint8_t* base = d->frame.data();
+    out->width = width;
+    out->height = height;
+    out->y = { base + static_cast<size_t>(d->cropTop) * stride + d->cropLeft,
+               stride, 1 };
+    out->cb = { base + cbOffset, chromaStride, chromaPixelStride };
+    out->cr = { base + crOffset, chromaStride, chromaPixelStride };
+
+    d->qImg++;
+    return true;
 }
 
 bool VideoDecoder::next(SrcFrame* out)
@@ -433,44 +567,14 @@ bool VideoDecoder::next(SrcFrame* out)
     release();
 
     const int spins = (d->sock >= 0) ? 4 : 64;   // a live stream must not block the tick
-    for (int i = 0; i < spins && !d->held; i++) {
+    for (int i = 0; i < spins && !d->frameReady; i++)
         pump();
-        if (!d->reader) break;
-        if (AImageReader_acquireLatestImage(d->reader, &d->held) != AMEDIA_OK) d->held = nullptr;
-        if (d->held) d->qImg++;
-    }
-    if (!d->held) return false;
-
-    int32_t planes = 0;
-    AImage_getNumberOfPlanes(d->held, &planes);
-    AImage_getWidth(d->held, &out->width);
-    AImage_getHeight(d->held, &out->height);
-    if (planes != 3 || out->width < 2 || out->height < 2) {
-        release();
-        return false;
-    }
-
-    SrcPlane* p[3] = { &out->y, &out->cb, &out->cr };
-    for (int i = 0; i < 3; i++) {
-        uint8_t* data = nullptr;
-        int len = 0;
-        if (AImage_getPlaneData(d->held, i, &data, &len) != AMEDIA_OK || !data ||
-            AImage_getPlaneRowStride(d->held, i, &p[i]->rowStride) != AMEDIA_OK ||
-            AImage_getPlanePixelStride(d->held, i, &p[i]->pixelStride) != AMEDIA_OK) {
-            release();
-            return false;
-        }
-        p[i]->data = data;
-    }
-    return true;
+    return describe_frame(out);
 }
 
 void VideoDecoder::release()
 {
-    if (mImpl && mImpl->held) {
-        AImage_delete(mImpl->held);
-        mImpl->held = nullptr;
-    }
+    if (mImpl) mImpl->frameReady = false;
 }
 
 }  // namespace recam
