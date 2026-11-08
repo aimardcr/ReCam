@@ -113,7 +113,7 @@ def desktop(version, target, output):
         path = output / f"ReCam-{version}-{target}.tar.gz"
         with tarfile.open(path, "w:gz") as archive:
             archive.add(bundle, arcname="ReCam")
-            for name in ("LICENSE", "NOTICE", "README.md"):
+            for name in ("LICENSE", "NOTICE", "README.md", "assets/recam-preview.jpg"):
                 archive.add(ROOT / name, arcname=f"ReCam/{name}")
             entry = tarfile.TarInfo("ReCam/BUILD-INFO.json")
             data = info.encode(); entry.size = len(data); entry.mode = 0o644
@@ -127,7 +127,7 @@ def desktop(version, target, output):
                 for file in sorted(bundle.rglob("*")):
                     if file.is_file():
                         archive.write(file, file.relative_to(bundle).as_posix())
-            for name in ("LICENSE", "NOTICE", "README.md"):
+            for name in ("LICENSE", "NOTICE", "README.md", "assets/recam-preview.jpg"):
                 archive.write(ROOT / name, name)
             archive.writestr("BUILD-INFO.json", info)
     print(path)
