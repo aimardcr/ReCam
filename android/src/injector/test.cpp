@@ -5,6 +5,8 @@
 #include <unistd.h>
 
 #include <cstdio>
+#include <sys/wait.h>
+#include "test_preflight.hpp"
 
 #include <KittyMemoryMgr.hpp>
 #include "Injector/KittyInjector.hpp"
@@ -14,6 +16,42 @@
 namespace t = recam::target;
 
 static const int kRemoteCallTimeoutMs = 60000;  // the pixel tests touch a few MB
+
+// Self-tests overwrite ring metadata and call gralloc from the borrowed main
+// thread. Refuse live users before ptrace can interrupt camera callbacks.
+static bool preflight()
+{
+    if (t::find("recam", "feed") > 0) {
+        fprintf(stderr, "recam test: stop the feeder before running self-tests.\n");
+        return false;
+    }
+    FILE* pipe = popen("/system/bin/dumpsys -t 3 media.camera 2>/dev/null", "r");
+    if (!pipe) return false;
+    std::string dump;
+    char chunk[4096];
+    bool oversized = false;
+    while (size_t n = fread(chunk, 1, sizeof(chunk), pipe)) {
+        if (dump.size() + n <= 1024 * 1024) dump.append(chunk, n);
+        else oversized = true;
+    }
+    const bool readError = ferror(pipe);
+    const int status = pclose(pipe);
+    if (readError || oversized || status == -1 || !WIFEXITED(status) ||
+        WEXITSTATUS(status) != 0 || recam::camera_clients(dump) == recam::CameraClients::Unknown) {
+        fprintf(stderr, "recam test: cannot verify camera-service idle state; refusing self-tests.\n");
+        return false;
+    }
+    if (recam::camera_clients(dump) != recam::CameraClients::Idle) {
+        fprintf(stderr, "recam test: close all camera clients before running self-tests.\n");
+        return false;
+    }
+    // The service query can take time; recheck the independent feeder afterward.
+    if (t::find("recam", "feed") > 0) {
+        fprintf(stderr, "recam test: a feeder started during preflight; stop it first.\n");
+        return false;
+    }
+    return true;
+}
 
 int recam::cli::test()
 {
@@ -27,6 +65,8 @@ int recam::cli::test()
         KITTY_LOGE("Could not find process \"%s\".", t::kProcName);
         return 1;
     }
+
+    if (!preflight()) return 1;
 
     const uintptr_t ctrlAddr = t::find_control_block(pid);
     if (!ctrlAddr) {
