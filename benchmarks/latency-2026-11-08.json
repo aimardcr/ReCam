@@ -1,0 +1,726 @@
+{
+  "720p-active": {
+    "metrics": {
+      "receive_to_queue_ms": {
+        "count": 525,
+        "p50": 2441.911616,
+        "p95": 3919.879924,
+        "p99": 4110.764539,
+        "max": 4211.28177
+      },
+      "queue_to_dequeue_ms": {
+        "count": 525,
+        "p50": 796.668308,
+        "p95": 948.932231,
+        "p99": 1116.400385,
+        "max": 1175.936615
+      },
+      "output_copy_ms": {
+        "count": 525,
+        "p50": 0.852923,
+        "p95": 2.532615,
+        "p99": 4.383462,
+        "max": 7.297307
+      },
+      "scale_ms": {
+        "count": 525,
+        "p50": 15.880077,
+        "p95": 21.038462,
+        "p99": 34.925,
+        "max": 83.551693
+      },
+      "receive_to_publish_ms": {
+        "count": 525,
+        "p50": 3269.631461,
+        "p95": 4729.058385,
+        "p99": 4847.844308,
+        "max": 4891.826846
+      },
+      "publish_to_consume_ms": {
+        "count": 833,
+        "p50": 20.447923,
+        "p95": 88.615692,
+        "p99": 106.076693,
+        "max": 127.08023
+      },
+      "camera_copy_ms": {
+        "count": 833,
+        "p50": 1.79777,
+        "p95": 11.357538,
+        "p99": 14.898769,
+        "max": 20.363077
+      },
+      "receive_to_consume_ms": {
+        "count": 833,
+        "p50": 3270.759154,
+        "p95": 4749.821769,
+        "p99": 4888.595462,
+        "max": 4912.704001
+      },
+      "host_to_consume_estimate_ms": {
+        "count": 833,
+        "p50": 3215.498166,
+        "p95": 4708.677275,
+        "p99": 4846.434169,
+        "max": 4866.234929
+      },
+      "host_to_consume_lower_ms": {
+        "count": 833,
+        "p50": 3093.106339,
+        "p95": 4586.285448,
+        "p99": 4724.042342,
+        "max": 4743.843102
+      },
+      "host_to_consume_upper_ms": {
+        "count": 833,
+        "p50": 3337.889993,
+        "p95": 4831.069102,
+        "p99": 4968.825996,
+        "max": 4988.626756
+      },
+      "host_to_receive_estimate_ms": {
+        "count": 525,
+        "p50": -48.506126,
+        "p95": 11.704768,
+        "p99": 26.181634,
+        "max": 55.864088
+      }
+    },
+    "clock_uncertainty_ms": 122.391827,
+    "clock_offset_envelope_ns": [
+      123164225696870,
+      123164470480524
+    ],
+    "publications": 525,
+    "unique_consumed": 464,
+    "publications_not_observed_consumed": 61,
+    "unmatched_consumes_including_warmup": 1,
+    "lanes": [
+      [
+        1440,
+        1080
+      ]
+    ],
+    "size": "1280x720",
+    "fps": 30,
+    "seconds": 25,
+    "warmup_seconds": 3,
+    "clock_samples": [
+      {
+        "lower_ns": 123164226605663,
+        "upper_ns": 123164460683641,
+        "samples": [
+          {
+            "lower_ns": 123164223153131,
+            "upper_ns": 123164523874839,
+            "rtt_ns": 300721708
+          },
+          {
+            "lower_ns": 123164225979474,
+            "upper_ns": 123164460683641,
+            "rtt_ns": 234704167
+          },
+          {
+            "lower_ns": 123164225615531,
+            "upper_ns": 123164518292614,
+            "rtt_ns": 292677083
+          },
+          {
+            "lower_ns": 123164223260326,
+            "upper_ns": 123164487798535,
+            "rtt_ns": 264538209
+          },
+          {
+            "lower_ns": 123164176859743,
+            "upper_ns": 123164689754910,
+            "rtt_ns": 512895167
+          },
+          {
+            "lower_ns": 123164162878406,
+            "upper_ns": 123164517028239,
+            "rtt_ns": 354149833
+          },
+          {
+            "lower_ns": 123164216071506,
+            "upper_ns": 123164469147297,
+            "rtt_ns": 253075791
+          },
+          {
+            "lower_ns": 123164211086288,
+            "upper_ns": 123164493944955,
+            "rtt_ns": 282858667
+          },
+          {
+            "lower_ns": 123164222642143,
+            "upper_ns": 123164468326143,
+            "rtt_ns": 245684000
+          },
+          {
+            "lower_ns": 123164226605663,
+            "upper_ns": 123164476513122,
+            "rtt_ns": 249907459
+          },
+          {
+            "lower_ns": 123164224330810,
+            "upper_ns": 123164499317477,
+            "rtt_ns": 274986667
+          },
+          {
+            "lower_ns": 123164224497816,
+            "upper_ns": 123164466022941,
+            "rtt_ns": 241525125
+          }
+        ]
+      },
+      {
+        "lower_ns": 123164225696870,
+        "upper_ns": 123164470480524,
+        "samples": [
+          {
+            "lower_ns": 123164220919273,
+            "upper_ns": 123164482540440,
+            "rtt_ns": 261621167
+          },
+          {
+            "lower_ns": 123164223560412,
+            "upper_ns": 123164479677828,
+            "rtt_ns": 256117416
+          },
+          {
+            "lower_ns": 123164224085710,
+            "upper_ns": 123164722006876,
+            "rtt_ns": 497921166
+          },
+          {
+            "lower_ns": 123164199651104,
+            "upper_ns": 123164483664145,
+            "rtt_ns": 284013041
+          },
+          {
+            "lower_ns": 123164209828844,
+            "upper_ns": 123164701773427,
+            "rtt_ns": 491944583
+          },
+          {
+            "lower_ns": 123164116042566,
+            "upper_ns": 123164470480524,
+            "rtt_ns": 354437958
+          },
+          {
+            "lower_ns": 123164225696870,
+            "upper_ns": 123164668464078,
+            "rtt_ns": 442767208
+          },
+          {
+            "lower_ns": 123164163071043,
+            "upper_ns": 123164489179626,
+            "rtt_ns": 326108583
+          },
+          {
+            "lower_ns": 123164220851530,
+            "upper_ns": 123164685986989,
+            "rtt_ns": 465135459
+          },
+          {
+            "lower_ns": 123164158331331,
+            "upper_ns": 123164516298373,
+            "rtt_ns": 357967042
+          },
+          {
+            "lower_ns": 123164151368566,
+            "upper_ns": 123164719047107,
+            "rtt_ns": 567678541
+          },
+          {
+            "lower_ns": 123164170252008,
+            "upper_ns": 123164735244174,
+            "rtt_ns": 564992166
+          }
+        ]
+      }
+    ],
+    "initial_status": {
+      "now_ns": 161474196247470,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 1745
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 5,
+        "hooks_installed": 0,
+        "owner_pid": 1745,
+        "owner_base": "0x0",
+        "control_addr": "0x7080cd9000"
+      },
+      "ring": {
+        "present": true,
+        "version": 3,
+        "speaks_version": 3,
+        "bytes": 37605376,
+        "published": 0,
+        "consumed": 0,
+        "dropped": 0,
+        "lanes": []
+      }
+    },
+    "final_status": {
+      "now_ns": 161510329828164,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 1745
+      },
+      "feeder": {
+        "running": true,
+        "pid": 18442
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": true,
+        "generation": 6,
+        "hooks_installed": 1,
+        "owner_pid": 1745,
+        "owner_base": "0x6db219f000",
+        "control_addr": "0x7080cd9000"
+      },
+      "ring": {
+        "present": true,
+        "version": 3,
+        "speaks_version": 3,
+        "bytes": 37605376,
+        "published": 804,
+        "consumed": 1245,
+        "dropped": 0,
+        "lanes": [
+          {
+            "index": 0,
+            "req_width": 1440,
+            "req_height": 1080,
+            "width": 1440,
+            "height": 1080,
+            "served": true,
+            "published": 804,
+            "age_ms": 19
+          }
+        ]
+      }
+    },
+    "endpoint": "host encoded-byte proxy ingress to completed camera-plane copy",
+    "excluded": [
+      "capture and encoding",
+      "camera buffer unlock",
+      "app delivery and display"
+    ],
+    "caveats": [
+      "proxy and per-frame logging add measurement overhead",
+      "queue-to-dequeue includes feeder polling, not just hardware decode",
+      "receive timestamp is userspace read, not kernel packet arrival",
+      "clock bound assumes no offset excursion beyond pre/post envelope",
+      "Host-to-receive midpoint estimates can be negative within clock uncertainty; they are not physical negative delays."
+    ],
+    "measurement_window_ns": [
+      161482987410547,
+      161503987410547
+    ]
+  },
+  "1080p-active": {
+    "metrics": {
+      "receive_to_queue_ms": {
+        "count": 533,
+        "p50": 2177.540615,
+        "p95": 3632.489231,
+        "p99": 3806.647077,
+        "max": 3896.191077
+      },
+      "queue_to_dequeue_ms": {
+        "count": 533,
+        "p50": 771.269,
+        "p95": 959.608384,
+        "p99": 988.590462,
+        "max": 1037.498077
+      },
+      "output_copy_ms": {
+        "count": 533,
+        "p50": 1.267923,
+        "p95": 3.316,
+        "p99": 5.447,
+        "max": 8.866385
+      },
+      "scale_ms": {
+        "count": 533,
+        "p50": 16.000924,
+        "p95": 18.975077,
+        "p99": 23.207,
+        "max": 31.246385
+      },
+      "receive_to_publish_ms": {
+        "count": 533,
+        "p50": 2960.331923,
+        "p95": 4416.747385,
+        "p99": 4558.809616,
+        "max": 4637.630077
+      },
+      "publish_to_consume_ms": {
+        "count": 830,
+        "p50": 19.983385,
+        "p95": 84.548846,
+        "p99": 102.466154,
+        "max": 120.840538
+      },
+      "camera_copy_ms": {
+        "count": 830,
+        "p50": 1.761769,
+        "p95": 11.127385,
+        "p99": 14.658692,
+        "max": 22.809538
+      },
+      "receive_to_consume_ms": {
+        "count": 830,
+        "p50": 3000.224924,
+        "p95": 4446.728384,
+        "p99": 4568.975077,
+        "max": 4632.492539
+      },
+      "host_to_consume_estimate_ms": {
+        "count": 830,
+        "p50": 2951.594667,
+        "p95": 4385.480039,
+        "p99": 4519.084196,
+        "max": 4588.313427
+      },
+      "host_to_consume_lower_ms": {
+        "count": 830,
+        "p50": 2824.523341,
+        "p95": 4258.408713,
+        "p99": 4392.01287,
+        "max": 4461.242101
+      },
+      "host_to_consume_upper_ms": {
+        "count": 830,
+        "p50": 3078.665993,
+        "p95": 4512.551365,
+        "p99": 4646.155522,
+        "max": 4715.384753
+      },
+      "host_to_receive_estimate_ms": {
+        "count": 533,
+        "p50": -55.593872,
+        "p95": 0.153628,
+        "p99": 15.200859,
+        "max": 27.27218
+      }
+    },
+    "clock_uncertainty_ms": 127.071326,
+    "clock_offset_envelope_ns": [
+      123164223654956,
+      123164477797608
+    ],
+    "publications": 533,
+    "unique_consumed": 475,
+    "publications_not_observed_consumed": 58,
+    "unmatched_consumes_including_warmup": 4,
+    "lanes": [
+      [
+        1440,
+        1080
+      ]
+    ],
+    "size": "1920x1080",
+    "fps": 30,
+    "seconds": 25,
+    "warmup_seconds": 3,
+    "clock_samples": [
+      {
+        "lower_ns": 123164226962625,
+        "upper_ns": 123164477797608,
+        "samples": [
+          {
+            "lower_ns": 123164221934413,
+            "upper_ns": 123164492400746,
+            "rtt_ns": 270466333
+          },
+          {
+            "lower_ns": 123164225229319,
+            "upper_ns": 123164477975611,
+            "rtt_ns": 252746292
+          },
+          {
+            "lower_ns": 123164226242682,
+            "upper_ns": 123164527026848,
+            "rtt_ns": 300784166
+          },
+          {
+            "lower_ns": 123164189536317,
+            "upper_ns": 123164477797608,
+            "rtt_ns": 288261291
+          },
+          {
+            "lower_ns": 123164140814698,
+            "upper_ns": 123164732516740,
+            "rtt_ns": 591702042
+          },
+          {
+            "lower_ns": 123164172926557,
+            "upper_ns": 123164745281640,
+            "rtt_ns": 572355083
+          },
+          {
+            "lower_ns": 123164166788384,
+            "upper_ns": 123164507865092,
+            "rtt_ns": 341076708
+          },
+          {
+            "lower_ns": 123164219759425,
+            "upper_ns": 123164498446009,
+            "rtt_ns": 278686584
+          },
+          {
+            "lower_ns": 123164226962625,
+            "upper_ns": 123164484176083,
+            "rtt_ns": 257213458
+          },
+          {
+            "lower_ns": 123164223300669,
+            "upper_ns": 123164508622752,
+            "rtt_ns": 285322083
+          },
+          {
+            "lower_ns": 123164224331233,
+            "upper_ns": 123164491295275,
+            "rtt_ns": 266964042
+          },
+          {
+            "lower_ns": 123164133489528,
+            "upper_ns": 123164761786944,
+            "rtt_ns": 628297416
+          }
+        ]
+      },
+      {
+        "lower_ns": 123164223654956,
+        "upper_ns": 123164477371319,
+        "samples": [
+          {
+            "lower_ns": 123164218801328,
+            "upper_ns": 123164479739119,
+            "rtt_ns": 260937791
+          },
+          {
+            "lower_ns": 123164152436988,
+            "upper_ns": 123164547952363,
+            "rtt_ns": 395515375
+          },
+          {
+            "lower_ns": 123164220670501,
+            "upper_ns": 123164559788917,
+            "rtt_ns": 339118416
+          },
+          {
+            "lower_ns": 123164222393652,
+            "upper_ns": 123164477371319,
+            "rtt_ns": 254977667
+          },
+          {
+            "lower_ns": 123164221600498,
+            "upper_ns": 123164505390123,
+            "rtt_ns": 283789625
+          },
+          {
+            "lower_ns": 123164223176171,
+            "upper_ns": 123164496104213,
+            "rtt_ns": 272928042
+          },
+          {
+            "lower_ns": 123164166288142,
+            "upper_ns": 123164695257642,
+            "rtt_ns": 528969500
+          },
+          {
+            "lower_ns": 123164018194328,
+            "upper_ns": 123164747453744,
+            "rtt_ns": 729259416
+          },
+          {
+            "lower_ns": 123164223654956,
+            "upper_ns": 123164671909748,
+            "rtt_ns": 448254792
+          },
+          {
+            "lower_ns": 123164150048799,
+            "upper_ns": 123164545757507,
+            "rtt_ns": 395708708
+          },
+          {
+            "lower_ns": 123164149815363,
+            "upper_ns": 123164707416405,
+            "rtt_ns": 557601042
+          },
+          {
+            "lower_ns": 123164149017684,
+            "upper_ns": 123164708250309,
+            "rtt_ns": 559232625
+          }
+        ]
+      }
+    ],
+    "initial_status": {
+      "now_ns": 161524209838858,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 1745
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 6,
+        "hooks_installed": 0,
+        "owner_pid": 1745,
+        "owner_base": "0x0",
+        "control_addr": "0x7080cd9000"
+      },
+      "ring": {
+        "present": true,
+        "version": 3,
+        "speaks_version": 3,
+        "bytes": 37605376,
+        "published": 810,
+        "consumed": 1284,
+        "dropped": 0,
+        "lanes": [
+          {
+            "index": 0,
+            "req_width": 1440,
+            "req_height": 1080,
+            "width": 1440,
+            "height": 1080,
+            "served": true,
+            "published": 810,
+            "age_ms": 13681
+          }
+        ]
+      }
+    },
+    "final_status": {
+      "now_ns": 161560963405706,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 1745
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": true,
+        "generation": 7,
+        "hooks_installed": 1,
+        "owner_pid": 1745,
+        "owner_base": "0x6db1a4e000",
+        "control_addr": "0x7080cd9000"
+      },
+      "ring": {
+        "present": true,
+        "version": 3,
+        "speaks_version": 3,
+        "bytes": 37605376,
+        "published": 633,
+        "consumed": 1084,
+        "dropped": 0,
+        "lanes": [
+          {
+            "index": 0,
+            "req_width": 1440,
+            "req_height": 1080,
+            "width": 1440,
+            "height": 1080,
+            "served": true,
+            "published": 633,
+            "age_ms": 5774
+          }
+        ]
+      }
+    },
+    "endpoint": "host encoded-byte proxy ingress to completed camera-plane copy",
+    "excluded": [
+      "capture and encoding",
+      "camera buffer unlock",
+      "app delivery and display"
+    ],
+    "caveats": [
+      "proxy and per-frame logging add measurement overhead",
+      "queue-to-dequeue includes feeder polling, not just hardware decode",
+      "receive timestamp is userspace read, not kernel packet arrival",
+      "clock bound assumes no offset excursion beyond pre/post envelope",
+      "Host-to-receive midpoint estimates can be negative within clock uncertainty; they are not physical negative delays."
+    ],
+    "measurement_window_ns": [
+      161533694152473,
+      161554694152473
+    ]
+  },
+  "control-720p": {
+    "samples": [
+      [
+        1794151443.377,
+        16,
+        0,
+        0,
+        15538
+      ],
+      [
+        1794151448.389,
+        145,
+        129,
+        128,
+        1075096
+      ],
+      [
+        1794151453.396,
+        276,
+        255,
+        254,
+        1683015
+      ],
+      [
+        1794151458.427,
+        407,
+        381,
+        380,
+        2278799
+      ],
+      [
+        1794151463.449,
+        529,
+        510,
+        509,
+        3306603
+      ]
+    ],
+    "decoded_fps": 25.298804876999284,
+    "profiling": false,
+    "camera_lanes": 0,
+    "note": "No camera preview: no scaling or camera copies; not a matched overhead comparison"
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "date": "2026-11-08",
+  "device": "POCO 2409FPCC4G, Android 16 API 36, ARM64",
+  "build": "7f4f3b14221e6b91",
+  "baseline": {
+    "cycles": 30,
+    "fatal_processes": 7,
+    "exit_codes": [
+      0
+    ],
+    "fatal_lines": [
+      "11-08 18:37:05.669  4659  4673 F libc    : FORTIFY: pthread_mutex_lock called on a destroyed mutex (0xb400007d6080c0f8)",
+      "11-08 18:37:05.670  4659  4673 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 4673 (CodecLooper), pid 4659 (binder:4659_2)",
+      "11-08 18:37:08.279  4708  4718 F libc    : FORTIFY: pthread_mutex_lock called on a destroyed mutex (0xb40000784c013458)",
+      "11-08 18:37:08.281  4708  4718 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 4718 (CodecLooper), pid 4708 (binder:4708_2)",
+      "11-08 18:37:18.533  4979  4989 F libc    : FORTIFY: pthread_mutex_lock called on a destroyed mutex (0xb400007570615648)",
+      "11-08 18:37:18.534  4979  4989 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 4989 (CodecLooper), pid 4979 (binder:4979_2)",
+      "11-08 18:37:21.139  5032  5054 F libc    : FORTIFY: pthread_mutex_lock called on a destroyed mutex (0xb400006d216138d8)",
+      "11-08 18:37:21.140  5032  5054 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 5054 (CodecLooper), pid 5032 (binder:5032_2)",
+      "11-08 18:37:43.895  5723  5734 F libc    : FORTIFY: pthread_mutex_lock called on a destroyed mutex (0xb4000074cce12eb8)",
+      "11-08 18:37:43.896  5723  5734 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 5734 (CodecLooper), pid 5723 (binder:5723_2)",
+      "11-08 18:37:48.955  5819  5838 F libc    : FORTIFY: pthread_mutex_lock called on a destroyed mutex (0xb40000763620f918)",
+      "11-08 18:37:48.957  5819  5838 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 5838 (CodecLooper), pid 5819 (binder:5819_2)",
+      "11-08 18:37:51.554  5872  5881 F libc    : FORTIFY: pthread_mutex_lock called on a destroyed mutex (0xb40000750de08d08)",
+      "11-08 18:37:51.557  5872  5881 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 5881 (CodecLooper), pid 5872 (binder:5872_2)"
+    ]
+  },
+  "fixed": {
+    "cycles": 30,
+    "fatal_processes": 0,
+    "exit_codes": [
+      0
+    ],
+    "fatal_lines": []
+  },
+  "preview_cycles": [
+    {
+      "cycle": 1,
+      "mode": "disconnect",
+      "file_fallback": false,
+      "feeder_pid": 7849,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 51
+    },
+    {
+      "cycle": 2,
+      "mode": "stop_live",
+      "file_fallback": false,
+      "feeder_pid": 7914,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 9
+    },
+    {
+      "cycle": 3,
+      "mode": "pause_resume",
+      "file_fallback": false,
+      "feeder_pid": 7984,
+      "short_pause_publications": 0,
+      "fallback_publications": 23,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 51
+    },
+    {
+      "cycle": 4,
+      "mode": "reconnect",
+      "file_fallback": false,
+      "feeder_pid": 8165,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 91
+    },
+    {
+      "cycle": 5,
+      "mode": "disconnect",
+      "file_fallback": true,
+      "feeder_pid": 8256,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 57
+    },
+    {
+      "cycle": 6,
+      "mode": "stop_live",
+      "file_fallback": true,
+      "feeder_pid": 8343,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 13
+    },
+    {
+      "cycle": 7,
+      "mode": "pause_resume",
+      "file_fallback": true,
+      "feeder_pid": 8423,
+      "short_pause_publications": 0,
+      "fallback_publications": 11,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 52
+    },
+    {
+      "cycle": 8,
+      "mode": "reconnect",
+      "file_fallback": true,
+      "feeder_pid": 8532,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 108
+    }
+  ],
+  "preview_passed": true,
+  "cameraserver_pid_before": 23424,
+  "cameraserver_pid_after": 23424,
+  "in_process_selftest": {
+    "passed": 63,
+    "failed": 0
+  },
+  "limits": [
+    "Single-device short-duration validation",
+    "Self-test preflight is an idle-state snapshot, not a lock against newly starting clients",
+    "Original active-preview self-test restart was not reproduced; unsafe invocation is rejected instead",
+    "Process-exit workaround does not patch Android platform library"
+  ]
+}

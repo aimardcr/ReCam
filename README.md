@@ -40,7 +40,8 @@ process, so decoding and scaling never run inside the camera service.
   where the layout is read from the gralloc driver rather than guessed.
 - **Several stream sizes at once.** The ring keeps four size-keyed lanes, so an app
   running preview and analysis at different resolutions gets correct frames on both.
-- **Live desktop streaming.** H.264 over TCP through `adb forward`. A built-in RTMP
+- **Live desktop streaming.** H.264 in FLV over TCP through `adb forward`, with
+  complete-picture framing and raw Annex-B compatibility. A built-in RTMP
   listener accepts OBS and anything else that can publish.
 - **Any local capture device.** Including OBS Virtual Camera.
 - **Reversible.** `recam stop` removes the hook and restores the real camera without
@@ -137,7 +138,8 @@ Set *Output -> Encoder -> B-frames* to **0**, because ReCam synthesises timestam
 decode order and B-frames would reorder the output.
 
 The virtual camera is less to get wrong. RTMP is worth the extra steps only if you want
-OBS's own encoder settings to reach the device.
+OBS to publish over the network. Desktop ffmpeg re-encodes that input using
+the same streaming settings as other desktop sources.
 
 ## Command line
 
@@ -167,6 +169,31 @@ adb shell su -c '/data/local/tmp/recam stop'
 stream on `127.0.0.1:27183`, and otherwise generates a test pattern. A live sender takes
 priority over the file.
 
+The desktop sends FLV/AVC with one complete H.264 picture per tag and immediate
+packet flushing. The feeder recognizes FLV or raw Annex-B from the stream prefix;
+existing raw senders still work. Explicit tag lengths let FLV pictures reach the
+codec without waiting for the next picture. The device endpoint is plain TCP,
+not an RTMP server. The supported FLV profile has one SPS/PPS pair, 1/2/4-byte NAL
+lengths, no B-frame composition offset, and stable codec parameters per connection.
+Malformed, oversized, truncated, or unsupported input closes that connection.
+Reconnect to change codec parameters. At TCP EOF, queued output drains to codec
+EOS, with a two-second limit, before fallback resumes.
+
+Scaling preserves the existing centre crop and bilinear pixel values. A crop
+already matching the output size uses row copies. Resampling caches horizontal
+rows and uses NEON for the vertical interpolation on ARM.
+
+Live input is serviced independently of the file playback tick. The feeder drains
+ready codec output before and between nonblocking input submissions and publishes
+the newest decoded frame available. It polls socket readiness with a 2 ms timeout
+for checking codec output; this is not a guarantee of OS scheduling latency.
+Older decoded frames may be superseded, while encoded reference pictures are kept.
+A short input gap retains the last published frame. After two seconds without a
+new live frame, the feeder resumes paced file/pattern output; disconnecting also
+restores that fallback. File playback retains its original frame interval.
+If an encoded picture cannot be submitted or the compressed backlog exceeds the
+limit, the connection is closed instead of silently skipping reference pictures.
+
 ### Lifecycle failures
 
 `recam inject` exits nonzero if initialization fails or the payload does not report
@@ -176,18 +203,41 @@ cleanup; ownership is released only if cleanup succeeds.
 `recam stop` exits nonzero if hook removal fails. The payload keeps its ownership
 and shutdown entry point so removal can be retried, and another copy cannot take
 over while that ownership remains. The CLI also checks that both the active flag
-and hook count are cleared before reporting a successful stop.
+and hook count are cleared before reporting a successful stop. Source pointers and
+the trampoline remain valid for callbacks already running when the hook is removed.
+Substitution is then disabled, and the frame-ring mapping and fd are released when
+the final in-flight callback returns. Stop never waits on a callback because the
+injector may have interrupted that very thread. Payload images and trampolines
+still remain mapped; rings retained by older builds require process restart to
+reclaim. A successfully retired image is not reused by a later injection.
+The SELinux-compatible file-loading fallback stages a fresh inode/path for each
+injection and unlinks it after loading. It never overwrites a still-mapped payload.
+
+After closing codecs, sockets, and mappings, `recam feed` flushes diagnostics and
+exits without running process-global destructors. This avoids an observed Android
+buffer-pool teardown race: detached eviction threads can access mutexes destroyed
+during normal process exit. Other subcommands keep normal exit behavior.
 
 The desktop reports failed inject/stop commands as failed jobs. An injection error
 stops the Start operation before it launches the feeder or desktop stream.
 
+Remote commands also preserve the borrowed thread's `errno` before resuming it.
+Without this, an interrupted Binder call can observe an error left by injection
+and abort `cameraserver`, even when payload initialization succeeded.
+
 ### Regression checks
 
-After injecting on a test device, run `recam test` to exercise the real hook, buffer,
-and frame-ring paths inside `cameraserver` (63 checks on the verified device).
+Close camera previews and stop the feeder before running `recam test` after
+injection. It exercises the real hook, buffer, and frame-ring paths inside
+`cameraserver` (63 checks on the verified device) and temporarily changes ring state.
+`recam test` rejects a running feeder or any active camera client before attaching.
+It also refuses to run if the bounded `dumpsys media.camera` query fails or its
+client-list format is unrecognized. Keep cameras and feeders stopped for the full
+test: this preflight is a snapshot, not a lock against newly starting clients.
 
 Separate lifecycle tests simulate hook installation and removal failures in a
-standalone Android process, including failed cleanup and retry behavior. They do
+standalone Android process, including failed cleanup, retry behavior, and removal
+during an in-flight source callback. They do
 not inject faults into `cameraserver`. Build and run instructions are in
 [android/tests/README.md](android/tests/README.md).
 
@@ -195,6 +245,106 @@ Desktop error-propagation tests require only Python's standard library:
 
 ```bash
 python3 -m unittest discover -s desktop/tests -v
+```
+
+### Lifecycle soak
+
+With no active ReCam session and an unlocked camera preview open, run:
+
+```bash
+python3 tools/stress_lifecycle.py --serial DEVICE_SERIAL --cycles 8 \
+  --output .scratch/stability/run
+```
+
+Requires `adb` and `ffmpeg`. The runner deploys the current build, generates a
+small fallback clip, and exercises disconnect, stop during streaming, pause/resume,
+and reconnect with both file and pattern fallback. It checks actual live-frame
+consumption, stable `cameraserver` PID, stopped state, and fatal logs as well as
+exit status. The observed platform abort sometimes returned exit code zero.
+Raw logs and a JSON report are saved, including partial results on failure.
+For a time-based mixed-resolution run, use `--minutes 30 --alternate-sizes`.
+`--minutes` overrides `--cycles` and finishes the current cycle after the duration.
+Keep the preview active throughout; the runner records stopped-state camera-service
+RSS and receive-to-copy frame age, including deliberate stalls and repeated frames.
+It writes `progress.json` after each completed cycle. `--adb-root` supports a
+userdebug emulator with root adbd; dynamically allocated host ports allow separate
+devices to be tested concurrently.
+
+## Latency profiling
+
+Build and deploy the current binaries, stop any existing ReCam session, and leave
+an unlocked device's camera preview open. This opt-in benchmark injects the payload,
+starts a profiled feeder, and sends a synthetic H.264 stream using the desktop's
+existing encoder settings:
+
+```bash
+python tools/profile_latency.py --serial DEVICE_SERIAL --seconds 25 \
+  --size 1280x720 --output .scratch/latency/run-720p
+```
+
+Choose a new output directory for each run. The tool stops its feeder and removes
+the hook afterward. It saves raw device logs, host byte timestamps, the FFmpeg
+command, clock samples, and a JSON report with p50/p95/p99 timings. Run with
+`--size 1920x1080` to compare a second source size; output sizes come from the camera
+client and are recorded in the report.
+
+The measured host endpoint is encoded bytes arriving at a local TCP proxy; the
+device endpoint is completion of the copy into camera YUV planes. Capture,
+encoding, buffer unlock, app delivery, and display are excluded. Device-only stage
+timings use `CLOCK_MONOTONIC`. Host/device estimates include a clock uncertainty
+bound from status round trips before and after the run; they do not isolate pure
+USB/ADB transport latency. The proxy and per-frame logs add measurement overhead.
+Startup (first three seconds) and the nominal final second are excluded. Queue-to-
+dequeue time includes codec buffering and feeder polling, not just decoder work.
+
+Profiling is off by default. For manual collection, start the feeder with
+`RECAM_PROFILE=1 /data/local/tmp/recam feed` and collect `adb logcat -s ReCamLatency`.
+The feeder enables consumer logging through shared-memory ring version 3; rebuild
+both binaries and re-inject when upgrading from version 2. The profiler defaults
+to FLV; pass `--transport annexb` for a raw-stream comparison. Both use the same
+encoder settings and measurement endpoints.
+
+Measured baseline and limitations: [baseline report](benchmarks/latency-2026-11-08.md).
+After the live scheduling changes: [comparison report](benchmarks/scheduling-2026-11-08.md).
+Follow-up teardown diagnosis and validation:
+[stability report](benchmarks/stability-2026-11-08.md).
+Framing, scaling, and extended-soak results:
+[transport and scaling report](benchmarks/transport-2026-11-08.md).
+
+### Source-to-compositor sampling
+
+With a live preview open and ReCam stopped:
+
+```bash
+python3 -m venv .scratch/profile-env
+.scratch/profile-env/bin/pip install pillow qrcode opencv-python-headless
+.scratch/profile-env/bin/python tools/profile_compositor.py \
+  --serial DEVICE_SERIAL --size 1280x720 --samples 30 \
+  --output .scratch/compositor/run-720p
+```
+
+This sends synthetic frames with QR identifiers and records their host generation
+times. Each ADB screenshot is matched to its frame; request start and first PNG-header arrival bound the
+age of that frame at compositor sampling without synchronizing device clocks.
+The measurement includes QR generation, encoding, forward transport, camera delivery,
+and app composition. It excludes physical source capture and panel response, and
+snapshot frame age is distinct from the delay to its first presentation. Header
+arrival is an upper bound, not the exact sampling instant; full screenshot round
+trip is recorded separately. This is not an optical end-to-end measurement.
+Raw screenshots, per-source-frame generation times, and JSON evidence stay in
+the selected output directory. Unmatched images fail the measurement instead of
+being reported as zero latency. Use
+`--adb-root` for a rooted-adbd emulator. The source and hook are stopped afterward.
+
+Extended stability and Android 12 compatibility results:
+[extended validation report](benchmarks/extended-2026-11-08.md).
+
+Analysis regression checks:
+
+```bash
+python3 -m unittest discover -s tools/tests -v
+c++ -std=c++17 android/tests/latency.cpp -o /tmp/recam-timeline-test
+/tmp/recam-timeline-test
 ```
 
 ## Layout
