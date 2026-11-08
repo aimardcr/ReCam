@@ -1,4 +1,6 @@
-// recam_feed - fills the payload's shared frame ring.
+#include "../cli/commands.hpp"
+
+// recam feed - fills the payload's shared frame ring.
 
 #include <fcntl.h>
 #include <signal.h>
@@ -213,7 +215,7 @@ static Outcome attach_and_feed()
 
     const uintptr_t ctrlAddr = t::find_control_block(pid);
     if (!ctrlAddr) {
-        KITTY_LOGE("feed: no payload loaded in %s. Run recam_inject first.", t::kProcName);
+        KITTY_LOGE("feed: no payload loaded in %s. Run recam inject first.", t::kProcName);
         return Outcome::Error;
     }
 
@@ -342,7 +344,7 @@ static Outcome attach_and_feed()
     return out;
 }
 
-int main(int argc, char** argv)
+int recam::cli::feed(int argc, char** argv)
 {
     if (getuid() != 0) { KITTY_LOGE("Must run as root."); return 1; }
 

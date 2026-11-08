@@ -1,4 +1,6 @@
-// recam_test - run the payload's self-test inside cameraserver.
+#include "../cli/commands.hpp"
+
+// recam test - run the payload's self-test inside cameraserver.
 
 #include <unistd.h>
 
@@ -13,7 +15,7 @@ namespace t = recam::target;
 
 static const int kRemoteCallTimeoutMs = 60000;  // the pixel tests touch a few MB
 
-int main()
+int recam::cli::test()
 {
     if (getuid() != 0) {
         KITTY_LOGE("Must run as root.");
@@ -28,7 +30,7 @@ int main()
 
     const uintptr_t ctrlAddr = t::find_control_block(pid);
     if (!ctrlAddr) {
-        KITTY_LOGE("No payload loaded in %s. Run recam_inject first.", t::kProcName);
+        KITTY_LOGE("No payload loaded in %s. Run recam inject first.", t::kProcName);
         return 1;
     }
 

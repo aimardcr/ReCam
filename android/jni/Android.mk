@@ -31,7 +31,8 @@ endif
 
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := recam
+LOCAL_MODULE := recam_payload
+LOCAL_MODULE_FILENAME := librecam
 
 LOCAL_SRC_FILES := \
     src/payload/payload.cpp \
@@ -54,17 +55,26 @@ LOCAL_LDFLAGS  += -Wl,--gc-sections -Wl,--exclude-libs,ALL
 include $(BUILD_SHARED_LIBRARY)
 
 
-# ---------------------------------------------------------------- injector
+# ---------------------------------------------------------------- multicall executable
 
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := recam_inject
+LOCAL_MODULE := recam
 
 LOCAL_SRC_FILES := \
+    src/cli/main.cpp \
     src/injector/main.cpp \
+    src/injector/stop.cpp \
+    src/injector/status.cpp \
+    src/injector/test.cpp \
+    src/injector/watch.cpp \
     src/injector/sepolicy.cpp \
     src/injector/elfsym.cpp \
     src/injector/target.cpp \
+    src/feed/main.cpp \
+    src/feed/decoder.cpp \
+    src/feed/scale.cpp \
+    src/feed/h264.cpp \
     $(XZ_ROOT)/linux/lib/xz/xz_crc32.c \
     $(XZ_ROOT)/linux/lib/xz/xz_dec_lzma2.c \
     $(XZ_ROOT)/linux/lib/xz/xz_dec_stream.c \
@@ -73,6 +83,7 @@ LOCAL_SRC_FILES := \
 LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/$(KITTY_MEM) \
     $(LOCAL_PATH)/$(KITTY_INJ) \
+    $(LOCAL_PATH)/src/injector \
     $(LOCAL_PATH)/$(XZ_ROOT)/userspace \
     $(LOCAL_PATH)/$(XZ_ROOT)/linux/include/linux
 
@@ -80,99 +91,6 @@ LOCAL_C_INCLUDES += \
 LOCAL_CFLAGS += -DXZ_DEC_ANY_CHECK -Wno-unused-parameter
 
 # kNO_KEYSTONE: AndKittyInjector builds without the keystone assembler by default.
-LOCAL_CPPFLAGS += -std=c++20 -fexceptions -Wall -Wextra -DkNO_KEYSTONE -DkUSE_LOGCAT
-LOCAL_LDLIBS   += -llog
-
-include $(BUILD_EXECUTABLE)
-
-
-# ---------------------------------------------------------------- stop tool
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := recam_stop
-
-LOCAL_SRC_FILES := \
-    src/injector/stop.cpp \
-    src/injector/target.cpp \
-    $(KITTY_SRC)
-
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(KITTY_MEM) $(LOCAL_PATH)/$(KITTY_INJ)
-LOCAL_CPPFLAGS += -std=c++20 -fexceptions -Wall -Wextra -DkNO_KEYSTONE -DkUSE_LOGCAT
-LOCAL_LDLIBS   += -llog
-
-include $(BUILD_EXECUTABLE)
-
-
-# ---------------------------------------------------------------- self-test runner
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := recam_test
-
-LOCAL_SRC_FILES := \
-    src/injector/test.cpp \
-    src/injector/target.cpp \
-    $(KITTY_SRC)
-
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(KITTY_MEM) $(LOCAL_PATH)/$(KITTY_INJ)
-LOCAL_CPPFLAGS += -std=c++20 -fexceptions -Wall -Wextra -DkNO_KEYSTONE -DkUSE_LOGCAT
-LOCAL_LDLIBS   += -llog
-
-include $(BUILD_EXECUTABLE)
-
-
-# ---------------------------------------------------------------- status probe
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := recam_status
-
-LOCAL_SRC_FILES := \
-    src/injector/status.cpp \
-    src/injector/target.cpp \
-    $(KITTY_SRC)
-
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(KITTY_MEM) $(LOCAL_PATH)/$(KITTY_INJ)
-LOCAL_CPPFLAGS += -std=c++20 -fexceptions -Wall -Wextra -DkNO_KEYSTONE -DkUSE_LOGCAT
-LOCAL_LDLIBS   += -llog
-
-include $(BUILD_EXECUTABLE)
-
-
-# ---------------------------------------------------------------- respawn watcher
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := recam_watch
-
-LOCAL_SRC_FILES := \
-    src/injector/watch.cpp \
-    src/injector/target.cpp \
-    $(KITTY_SRC)
-
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(KITTY_MEM) $(LOCAL_PATH)/$(KITTY_INJ)
-LOCAL_CPPFLAGS += -std=c++20 -fexceptions -Wall -Wextra -DkNO_KEYSTONE -DkUSE_LOGCAT
-LOCAL_LDLIBS   += -llog
-
-include $(BUILD_EXECUTABLE)
-
-
-# ---------------------------------------------------------------- frame feeder
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := recam_feed
-
-LOCAL_SRC_FILES := \
-    src/feed/main.cpp \
-    src/feed/decoder.cpp \
-    src/feed/scale.cpp \
-    src/feed/h264.cpp \
-    src/injector/target.cpp \
-    $(KITTY_SRC)
-
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(KITTY_MEM) $(LOCAL_PATH)/$(KITTY_INJ) $(LOCAL_PATH)/src/injector
 LOCAL_CPPFLAGS += -std=c++20 -fexceptions -Wall -Wextra -DkNO_KEYSTONE -DkUSE_LOGCAT
 LOCAL_LDLIBS   += -llog -lmediandk -landroid
 

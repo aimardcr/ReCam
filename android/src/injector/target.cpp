@@ -41,7 +41,25 @@ std::string proc_name(pid_t pid)
     return base ? base + 1 : buf;
 }
 
-pid_t find(const char* name)
+// Match argv[1] exactly, not a substring of a shell command or source path.
+static bool has_command(pid_t pid, const char* command)
+{
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/%d/cmdline", pid);
+    FILE* f = fopen(path, "rb");
+    if (!f) return false;
+    char buf[4096];
+    const size_t n = fread(buf, 1, sizeof(buf), f);
+    fclose(f);
+    const char* firstEnd = static_cast<const char*>(memchr(buf, 0, n));
+    if (!firstEnd) return false;
+    const char* arg = firstEnd + 1;
+    const size_t remaining = n - static_cast<size_t>(arg - buf);
+    const char* end = static_cast<const char*>(memchr(arg, 0, remaining));
+    return end && strcmp(arg, command) == 0;
+}
+
+pid_t find(const char* name, const char* command)
 {
     DIR* d = opendir("/proc");
     if (!d) return -1;
@@ -51,7 +69,10 @@ pid_t find(const char* name)
     while ((e = readdir(d)) != nullptr) {
         if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
         pid_t p = static_cast<pid_t>(atoi(e->d_name));
-        if (proc_name(p) == name) { found = p; break; }
+        if (proc_name(p) == name && (!command || has_command(p, command))) {
+            found = p;
+            break;
+        }
     }
     closedir(d);
     return found;

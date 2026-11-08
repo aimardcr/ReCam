@@ -1,4 +1,6 @@
-// recam_status - machine-readable state, for a UI to poll.
+#include "../cli/commands.hpp"
+
+// recam status - machine-readable state, for a UI to poll.
 
 #include <fcntl.h>
 #include <string.h>
@@ -47,7 +49,7 @@ static uint64_t now_ns()
 
 static const char* yn(bool b) { return b ? "true" : "false"; }
 
-int main()
+int recam::cli::status()
 {
     const uint64_t now = now_ns();
     const pid_t    pid = t::find(t::kProcName);
@@ -59,7 +61,7 @@ int main()
     printf("  \"cameraserver\": { \"running\": %s, \"pid\": %d },\n",
            yn(pid > 0), pid > 0 ? pid : 0);
 
-    const pid_t feeder = t::find("recam_feed");
+    const pid_t feeder = t::find("recam", "feed");
     printf("  \"feeder\": { \"running\": %s, \"pid\": %d },\n",
            yn(feeder > 0), feeder > 0 ? feeder : 0);
 

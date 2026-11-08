@@ -330,7 +330,7 @@ class Window(QMainWindow):
 
         st = dev.status()
         if st is None:
-            self.lbl_payload.setText("no answer from recam_status")
+            self.lbl_payload.setText("no answer from recam status")
             return
 
         if not st.get("root", False):

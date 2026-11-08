@@ -1,3 +1,5 @@
+#include "../cli/commands.hpp"
+
 // ReCam injector - loads librecam.so into cameraserver.
 
 #include <sys/ptrace.h>
@@ -296,7 +298,7 @@ static Route choose_route(pid_t targetPid, const std::string& payload,
 
 // --------------------------------------------------------------------------- main
 
-int main()
+int recam::cli::inject()
 {
     if (getuid() != 0) {
         KITTY_LOGE("Must run as root.");

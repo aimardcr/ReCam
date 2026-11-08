@@ -20,7 +20,7 @@ likely illegal where you live.
 
 ## How it works
 
-`recam_inject` resolves `android::camera3::Camera3OutputStream::returnBufferCheckedLocked`
+`recam inject` resolves `android::camera3::Camera3OutputStream::returnBufferCheckedLocked`
 in the running `cameraserver`, attaches with ptrace, and loads `librecam.so`. The
 payload installs an inline hook on that function. Each time the camera service returns
 a filled buffer to a stream, the hook locks the gralloc buffer, overwrites the YUV
@@ -30,7 +30,7 @@ Frame metadata is never touched. Timestamps, exposure, focus state and sensor
 characteristics are whatever the real camera reported, so the substitution does not
 show up in capture results.
 
-Pixels arrive through a shared memory ring that `recam_feed` fills from a separate
+Pixels arrive through a shared memory ring that `recam feed` fills from a separate
 process, so decoding and scaling never run inside the camera service.
 
 ## Features
@@ -43,10 +43,10 @@ process, so decoding and scaling never run inside the camera service.
 - **Live desktop streaming.** H.264 over TCP through `adb forward`. A built-in RTMP
   listener accepts OBS and anything else that can publish.
 - **Any local capture device.** Including OBS Virtual Camera.
-- **Reversible.** `recam_stop` removes the hook and restores the real camera without
+- **Reversible.** `recam stop` removes the hook and restores the real camera without
   restarting `cameraserver`.
 - **One payload at a time.** Re-injecting stands the previous copy down first.
-- **Self-test.** `recam_test` runs 63 checks inside the camera service covering the
+- **Self-test.** `recam test` runs 63 checks inside the camera service covering the
   hook, buffer layouts, fence ownership and the frame ring.
 
 ## Requirements
@@ -110,7 +110,7 @@ export ANDROID_NDK_HOME=/path/to/ndk
 python tools/package.py
 ```
 
-This runs `ndk-build`, folds the six device binaries into the package, and writes
+This runs `ndk-build`, bundles `recam` and `librecam.so` into the package, and writes
 `dist/ReCam`. `adb` and `ffmpeg` are not bundled and remain PATH dependencies.
 
 ## Sources
@@ -141,26 +141,29 @@ OBS's own encoder settings to reach the device.
 
 ## Command line
 
-The console is a front end for these. They take no arguments.
+The console is a front end for one executable, `recam`, with these subcommands.
+Keep `librecam.so` beside it; the shared library is the payload loaded into
+`cameraserver`. Run `recam --help` for usage. `recam feed [FILE]` optionally selects a
+video file; the other subcommands take no arguments.
 
 | Tool | Does |
 |---|---|
-| `recam_inject` | Loads the payload and installs the hook |
-| `recam_feed` | Fills the frame ring from a file, a live sender, or a built-in test pattern |
-| `recam_stop` | Removes the hook and restores the real camera |
-| `recam_status` | Prints state as JSON; read-only and safe to poll |
-| `recam_test` | Runs the self-test inside `cameraserver` |
-| `recam_watch` | Re-injects when `cameraserver` respawns |
+| `recam inject` | Loads the payload and installs the hook |
+| `recam feed` | Fills the frame ring from a file, a live sender, or a built-in test pattern |
+| `recam stop` | Removes the hook and restores the real camera |
+| `recam status` | Prints state as JSON; read-only and safe to poll |
+| `recam test` | Runs the self-test inside `cameraserver` |
+| `recam watch` | Re-injects when `cameraserver` respawns |
 
 ```bash
-adb push android/libs/arm64-v8a/* /data/local/tmp/
-adb shell su -c 'chmod 755 /data/local/tmp/recam_*'
-adb shell su -c '/data/local/tmp/recam_inject'
-adb shell su -c '/data/local/tmp/recam_feed'     # Ctrl-C to stop
-adb shell su -c '/data/local/tmp/recam_stop'
+adb push android/libs/arm64-v8a/recam android/libs/arm64-v8a/librecam.so /data/local/tmp/
+adb shell su -c 'chmod 755 /data/local/tmp/recam'
+adb shell su -c '/data/local/tmp/recam inject'
+adb shell su -c '/data/local/tmp/recam feed'     # Ctrl-C to stop
+adb shell su -c '/data/local/tmp/recam stop'
 ```
 
-`recam_feed` plays `/data/local/tmp/recam_source.mp4` if it exists, accepts an H.264
+`recam feed` plays `/data/local/tmp/recam_source.mp4` if it exists, accepts an H.264
 stream on `127.0.0.1:27183`, and otherwise generates a test pattern. A live sender takes
 priority over the file.
 

@@ -1,4 +1,6 @@
-// recam_watch - keep the payload loaded across cameraserver restarts.
+#include "../cli/commands.hpp"
+
+// recam watch - keep the payload loaded across cameraserver restarts.
 
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -19,8 +21,6 @@
 #include "target.hpp"
 
 namespace t = recam::target;
-
-static const char* kInjectName = "recam_inject";
 
 // Do not re-inject as fast as a crash loop restarts.
 static const int kMaxConsecutiveFailures = 5;
@@ -43,17 +43,14 @@ static void sleep_ms(int ms)
 
 // ------------------------------------------------------------------ run the injector
 
-// Path to recam_inject, which lives next to this binary.
+// Re-exec this same binary with the inject subcommand.
 static std::string injector_path()
 {
     char exe[PATH_MAX] = {0};
     ssize_t n = ::readlink("/proc/self/exe", exe, sizeof(exe) - 1);
-    if (n <= 0) return kInjectName;
+    if (n <= 0) return {};
 
-    std::string p(exe, static_cast<size_t>(n));
-    size_t slash = p.rfind('/');
-    return (slash == std::string::npos) ? std::string(kInjectName)
-                                        : p.substr(0, slash + 1) + kInjectName;
+    return std::string(exe, static_cast<size_t>(n));
 }
 
 // fork+exec, not system(): no shell, and a clean exit status.
@@ -65,7 +62,7 @@ static int run_injector(const std::string& path)
         return -1;
     }
     if (child == 0) {
-        execl(path.c_str(), path.c_str(), static_cast<char*>(nullptr));
+        execl(path.c_str(), path.c_str(), "inject", static_cast<char*>(nullptr));
         _exit(127);   // exec failed
     }
 
@@ -131,7 +128,7 @@ static pid_t wait_for_respawn(pid_t oldPid)
 
 // ------------------------------------------------------------------ main
 
-int main()
+int recam::cli::watch()
 {
     if (getuid() != 0) {
         KITTY_LOGE("Must run as root.");
@@ -144,6 +141,10 @@ int main()
     signal(SIGHUP, SIG_IGN);
 
     const std::string inject = injector_path();
+    if (inject.empty()) {
+        KITTY_LOGE("watch: could not resolve /proc/self/exe");
+        return 1;
+    }
     KITTY_LOGI("watch: supervising %s using %s", t::kProcName, inject.c_str());
 
     int failures = 0;
@@ -199,6 +200,6 @@ int main()
     }
 
     KITTY_LOGI("watch: stopping. The payload stays loaded in the current "
-               "%s; run recam_stop to remove it.", t::kProcName);
+               "%s; run recam stop to remove it.", t::kProcName);
     return 0;
 }

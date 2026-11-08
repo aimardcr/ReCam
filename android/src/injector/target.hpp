@@ -17,7 +17,8 @@ extern const char* const kProcName;
 
 int         sdk_level();
 std::string proc_name(pid_t pid);
-pid_t       find(const char* name);
+// Optional argv[1] match distinguishes subcommands of the recam executable.
+pid_t       find(const char* name, const char* command = nullptr);
 
 // Found via the named anonymous mapping; a memfd dlopen leaves no stable path.
 uintptr_t find_control_block(pid_t pid);

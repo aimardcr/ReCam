@@ -1,4 +1,6 @@
-// recam_stop - stand the payload down and give the real camera back.
+#include "../cli/commands.hpp"
+
+// recam stop - stand the payload down and give the real camera back.
 
 #include <unistd.h>
 
@@ -13,7 +15,7 @@ namespace t = recam::target;
 
 static const int kRemoteCallTimeoutMs = 3000;
 
-int main()
+int recam::cli::stop()
 {
     if (getuid() != 0) {
         KITTY_LOGE("Must run as root.");
@@ -55,7 +57,7 @@ int main()
     t::release(kmgr, pid);
 
     if (ok)
-        KITTY_LOGI("Done. The real camera is restored; run recam_inject to hook again.");
+        KITTY_LOGI("Done. The real camera is restored; run recam inject to hook again.");
     else
         KITTY_LOGE("Could not stand the payload down. "
                    "Kill %s (pid %d) to force a clean restart.", t::kProcName, pid);

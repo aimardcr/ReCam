@@ -12,8 +12,7 @@ REMOTE_MARKER = f"{REMOTE_DIR}/.recam_build"
 REMOTE_SOURCE = f"{REMOTE_DIR}/recam_source.mp4"
 STREAM_PORT = 27183
 
-BINARIES = ["librecam.so", "recam_inject", "recam_stop", "recam_status",
-            "recam_feed", "recam_watch"]
+BINARIES = ["librecam.so", "recam"]
 EXECUTABLES = [b for b in BINARIES if not b.endswith(".so")]
 
 # Windows would otherwise flash a console window for every adb call.
@@ -117,10 +116,10 @@ class Device:
         return f"deployed build {want} from {libs}"
 
     def inject(self):
-        return self.shell(f"{REMOTE_DIR}/recam_inject", timeout=120)
+        return self.shell(f"{REMOTE_DIR}/recam inject", timeout=120)
 
     def stop_payload(self):
-        return self.shell(f"{REMOTE_DIR}/recam_stop", timeout=120)
+        return self.shell(f"{REMOTE_DIR}/recam stop", timeout=120)
 
     def push_source(self, local_path):
         rc, _, err = self._run(["push", local_path, REMOTE_SOURCE], timeout=600)
@@ -132,13 +131,14 @@ class Device:
 
     def start_feeder(self):
         # nohup + background, so the adb shell can return while it keeps running.
-        self.shell(f"nohup {REMOTE_DIR}/recam_feed >/dev/null 2>&1 &")
+        self.shell(f"nohup {REMOTE_DIR}/recam feed >/dev/null 2>&1 &")
 
     def stop_feeder(self):
-        self.shell("pkill -f recam_feed")
+        # Anchor argv[0] and argv[1], excluding the shell and other subcommands.
+        self.shell(f'pkill -f "^{REMOTE_DIR}/recam feed( |$)"')
 
     def status(self):
-        rc, out, _ = self.shell(f"{REMOTE_DIR}/recam_status", timeout=15)
+        rc, out, _ = self.shell(f"{REMOTE_DIR}/recam status", timeout=15)
         if rc != 0 or not out:
             return None
         try:
