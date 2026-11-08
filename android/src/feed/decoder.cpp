@@ -167,10 +167,9 @@ bool VideoDecoder::open(const char* path)
         close();
         return false;
     }
-    AMediaFormat_delete(fmt);
-
     KITTY_LOGI("decoder: %s, %s %dx%d, %lld us/frame", path, mime, mWidth, mHeight,
                static_cast<long long>(mIntervalUs));
+    AMediaFormat_delete(fmt); // mime points into this format
     return true;
 }
 
