@@ -496,7 +496,9 @@ void lane_publish(ShmLane* l, uint8_t luma)
     memset(buf, luma, ySize);
     memset(buf + ySize, 128, l->bufBytes - ySize);
 
-    l->publishedNs = test_now_ns();
+    l->slotSeq[0] = 1;
+    l->slotNs[0] = test_now_ns();
+    l->publishedNs = l->slotNs[0];
     l->published   = 1;
 }
 

@@ -8,12 +8,12 @@ namespace recam {
 
 // "RECAMSHM" little-endian.
 static const uint64_t kShmMagic   = 0x4D48534D41434552ULL;
-static const uint32_t kShmVersion = 3;
+static const uint32_t kShmVersion = 4;
 
 // Distinct camera buffer sizes served at once; a session rarely opens more.
 static const uint32_t kShmLanes = 4;
 
-// Enough that the producer cannot lap the consumer mid-copy.
+// Readers pin slots; the producer never overwrites the current publication.
 static const uint32_t kLaneBufs = 3;
 
 // Page-aligned, so no lane buffer shares a page with the header.
@@ -37,6 +37,13 @@ struct ShmLane {
     volatile uint32_t bufBytes;     // one buffer; the lane holds kLaneBufs of them
     volatile uint64_t published;    // the newest buffer is (published - 1) % kLaneBufs
     volatile uint64_t publishedNs;
+
+    // Metadata is immutable while users hold shared access; exclusive access is
+    // used only to claim/configure/retire a lane. Slot locks protect pixel copies.
+    uint32_t access;
+    uint32_t slots[kLaneBufs];
+    uint64_t slotSeq[kLaneBufs];
+    uint64_t slotNs[kLaneBufs];
 };
 
 struct ShmHeader {
@@ -53,6 +60,7 @@ struct ShmHeader {
 
     // Opt-in per-frame logging, enabled by RECAM_PROFILE=1 in the feeder.
     uint32_t profiling;
+    uint64_t producerSkipped;  // all non-current slots pinned; last frame retained
 };
 
 static_assert(sizeof(ShmHeader) <= kShmArenaBase, "header exceeds reserved page");

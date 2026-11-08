@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <time.h>
 #include <unistd.h>
 #include <string.h>
@@ -24,6 +25,7 @@
 #include "scale.hpp"
 #include "../common/control.hpp"
 #include "../common/shmframe.hpp"
+#include "../common/ring_access.hpp"
 
 namespace t = recam::target;
 using recam::ShmHeader;
@@ -175,13 +177,22 @@ static void service_lanes(ShmHeader* h, uint64_t nowN)
 {
     for (uint32_t i = 0; i < recam::kShmLanes; i++) {
         recam::ShmLane& l = h->lane[i];
+        // Fast path only reads atomic metadata. Exclusive access is needed for
+        // reconfiguration, never for normal publications or camera copies.
+        const uint32_t requested = __atomic_load_n(&l.reqWidth, __ATOMIC_ACQUIRE);
+        if (!requested) continue;
+        const uint64_t stamp = __atomic_load_n(&l.reqNs, __ATOMIC_ACQUIRE);
+        const bool idle = nowN > stamp && nowN - stamp > kLaneIdleNs;
+        if (!idle && __atomic_load_n(&l.width, __ATOMIC_ACQUIRE) == requested) continue;
+        recam::RingWrite access(&l.access, recam::kWriter + 1);
+        if (!access) continue;
         const uint32_t rw = l.reqWidth, rh = l.reqHeight;
         if (!rw || !rh) continue;
-
-        if (nowN - l.reqNs > kLaneIdleNs) {
+        const uint64_t current = __atomic_load_n(&l.reqNs, __ATOMIC_ACQUIRE);
+        if (nowN > current && nowN - current > kLaneIdleNs) {
             KITTY_LOGI("feed: retiring lane %u (%ux%u), nobody is asking", i, rw, rh);
             l.published = 0;
-            l.width = 0; l.height = 0; l.bufBytes = 0;
+            __atomic_store_n(&l.width, 0u, __ATOMIC_RELEASE); l.height = 0; l.bufBytes = 0;
             l.reqHeight = 0;
             __atomic_store_n(&l.reqWidth, 0u, __ATOMIC_RELEASE);
             continue;
@@ -189,7 +200,7 @@ static void service_lanes(ShmHeader* h, uint64_t nowN)
 
         if (l.width == rw && l.height == rh) continue;
 
-        if (rw > recam::kShmMaxWidth || rh > recam::kShmMaxHeight) {
+        if (rw > recam::kShmMaxWidth || rh > recam::kShmMaxHeight || (rw & 1) || (rh & 1)) {
             KITTY_LOGW("feed: lane %u wants %ux%u, past the %ux%u cap; leaving it unserved",
                        i, rw, rh, recam::kShmMaxWidth, recam::kShmMaxHeight);
             continue;
@@ -235,8 +246,15 @@ static Outcome attach_and_feed()
         return Outcome::Error;
     }
 
+    // Independent opens of the same ring must not publish concurrently. Keep
+    // the lock for this attachment; the kernel releases it on SIGKILL.
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        KITTY_LOGE("feed: another producer owns this frame ring");
+        close(fd);
+        return Outcome::Error;
+    }
+    struct RingFd { int fd; ~RingFd() { close(fd); } } ringFd{fd};
     void* base = mmap(nullptr, cb.shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    close(fd);
     if (base == MAP_FAILED) { KITTY_LOGE("feed: mmap: %s", strerror(errno)); return Outcome::Error; }
 
     ShmHeader* h = static_cast<ShmHeader*>(base);
@@ -245,6 +263,8 @@ static Outcome attach_and_feed()
         munmap(base, cb.shm_size);
         return Outcome::Error;
     }
+
+    recam::recover_dead_producer(*h);
 
     KITTY_LOGI("feed: attached to %s (pid %d) ring, %llu bytes, %u lanes",
                t::kProcName, pid, static_cast<unsigned long long>(cb.shm_size),
@@ -311,11 +331,18 @@ static Outcome attach_and_feed()
         uint32_t served = 0;
         for (uint32_t i = 0; publishFrame && i < recam::kShmLanes; i++) {
             recam::ShmLane& l = h->lane[i];
+            // Only this feeder configures an occupied lane; the payload claims
+            // free lanes but never edits a served lane's geometry.
             const uint32_t lw = l.width, lh = l.height;
             if (!lw || !lh || lw != l.reqWidth || lh != l.reqHeight) continue;
 
+            recam::RingPublication publication(l);
+            if (!publication.seq) {
+                __atomic_add_fetch(&h->producerSkipped, 1, __ATOMIC_RELAXED);
+                continue; // preserve the last complete frame; never wait on a reader
+            }
             uint8_t* buf = static_cast<uint8_t*>(base) + l.dataOffset +
-                           (l.published % recam::kLaneBufs) * l.bufBytes;
+                           publication.slot * l.bufBytes;
 
             const uint64_t scaleStart = profiling ? now_ns() : 0;
             if (haveSrc) {
@@ -326,8 +353,8 @@ static Outcome attach_and_feed()
 
             // Publish only after the pixels are in place.
             const uint64_t publishedNs = now_ns();
-            __atomic_store_n(&l.publishedNs, publishedNs, __ATOMIC_RELEASE);
-            const uint64_t seq = __atomic_add_fetch(&l.published, 1, __ATOMIC_RELEASE);
+            const uint64_t seq = publication.seq;
+            publication.publish(publishedNs);
             if (profiling && haveSrc && used == &g_stream && src.timing.receivedNs) {
                 const auto& t = src.timing;
                 __android_log_print(ANDROID_LOG_INFO, "ReCamLatency",
@@ -358,7 +385,7 @@ static Outcome attach_and_feed()
         if (now_ns() - lastCheck > 1000000000ull) {
             lastCheck = now_ns();
             recam::ControlBlock cur{};
-            if (!read_control(pid, ctrlAddr, &cur) || cur.shm_fd != cb.shm_fd) {
+            if (!read_control(pid, ctrlAddr, &cur) || cur.shm_fd != cb.shm_fd || cur.generation != cb.generation) {
                 KITTY_LOGW("feed: the payload republished its ring - re-attaching.");
                 out = Outcome::Reattach;
                 break;

@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "../common/shmframe.hpp"
+#include "../common/ring_access.hpp"
 
 #define LOG_TAG "ReCam"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -84,25 +85,14 @@ bool blit_i420(const uint8_t* src, uint32_t w, uint32_t h, const FrameTarget& t)
     return true;
 }
 
-// The lane already serving w x h, or nullptr. Runs on every HAL callback, so linear.
-ShmLane* find_lane(ShmHeader* h, uint32_t w, uint32_t h_)
-{
-    for (uint32_t i = 0; i < kShmLanes; i++) {
-        ShmLane& l = h->lane[i];
-        if (l.reqWidth == w && l.reqHeight == h_) return &l;
-    }
-    return nullptr;
-}
-
 // Claim a free lane for w x h. Two HAL threads can race; the loser retries next frame.
 ShmLane* claim_lane(ShmHeader* h, uint32_t w, uint32_t h_)
 {
     for (uint32_t i = 0; i < kShmLanes; i++) {
         ShmLane& l = h->lane[i];
-        uint32_t expected = 0;
-        if (!__atomic_compare_exchange_n(&l.reqWidth, &expected, w, false,
-                                         __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
-            continue;
+        RingWrite access(&l.access);
+        if (!access || l.reqWidth) continue;
+        __atomic_store_n(&l.reqWidth, w, __ATOMIC_RELEASE);
         l.reqHeight = h_;
         __atomic_store_n(&l.reqNs, now_ns(), __ATOMIC_RELEASE);
         LOGI("shm: lane %u now asking for %ux%u", i, w, h_);
@@ -123,34 +113,35 @@ public:
         const uint32_t w = static_cast<uint32_t>(t.width);
         const uint32_t hh = static_cast<uint32_t>(t.height);
 
-        ShmLane* l = find_lane(h, w, hh);
-        if (!l) {
-            if (!claim_lane(h, w, hh) && !m_warnedFull) {
-                LOGW("shm: all %u lanes are busy; %ux%u falls back", kShmLanes, w, hh);
-                m_warnedFull = true;
-            }
-            return false;   // the feeder has not carved this size yet
+        for (uint32_t i = 0; i < kShmLanes; ++i) {
+            ShmLane& lane = h->lane[i];
+            RingRead access(&lane.access);
+            if (access && lane.reqWidth == w && lane.reqHeight == hh)
+                return fill_lane(t, h, &lane);
         }
+        claim_lane(h, w, hh);
+        return false; // a new geometry must be served before it can be copied
+    }
 
+private:
+    bool fill_lane(const FrameTarget& t, ShmHeader* h, ShmLane* l)
+    {
+        const uint32_t w = static_cast<uint32_t>(t.width);
+        const uint32_t hh = static_cast<uint32_t>(t.height);
         // Keeps the lane alive; the feeder retires any lane nobody has asked about.
         __atomic_store_n(&l->reqNs, now_ns(), __ATOMIC_RELEASE);
 
-        const uint64_t seq = __atomic_load_n(&l->published, __ATOMIC_ACQUIRE);
-        if (seq == 0) return false;
-
-        if (now_ns() - l->publishedNs > kStaleNs) {
-            if (!m_warnedStale) {
-                LOGW("shm: no frame for >2s - feeder gone? falling back");
-                m_warnedStale = true;
-            }
-            return false;
-        }
-        m_warnedStale = false;
+        RingFrame frame(*l);
+        if (!frame.seq) return false;
+        const uint64_t seq = frame.seq;
+        const uint64_t stamp = l->slotNs[frame.slot];
+        const uint64_t now = now_ns();
+        if (now > stamp && now - stamp > kStaleNs) return false;
 
         if (l->width != w || l->height != hh || l->bufBytes == 0) return false;
 
         const uint64_t off = static_cast<uint64_t>(l->dataOffset) +
-                             static_cast<uint64_t>((seq - 1) % kLaneBufs) * l->bufBytes;
+                             static_cast<uint64_t>(frame.slot) * l->bufBytes;
         if (off + l->bufBytes > g_size) return false;
 
         const bool profiling = __atomic_load_n(&h->profiling, __ATOMIC_ACQUIRE) != 0;
@@ -158,25 +149,16 @@ public:
         if (!blit_i420(g_base + off, w, hh, t)) return false;
         const uint64_t copyEnd = profiling ? now_ns() : 0;
 
-        // Producer lapped us mid-copy: the frame we wrote is torn.
-        if (__atomic_load_n(&l->published, __ATOMIC_ACQUIRE) - seq >= kLaneBufs) {
-            h->dropped = h->dropped + 1;
-            return false;
-        }
-
         if (profiling) {
             __android_log_print(ANDROID_LOG_INFO, "ReCamLatency",
                 "event=consume lane=%u seq=%llu start=%llu end=%llu",
                 static_cast<unsigned>(l - h->lane), (unsigned long long)seq,
                 (unsigned long long)copyStart, (unsigned long long)copyEnd);
         }
-        h->consumed = h->consumed + 1;
+        __atomic_add_fetch(&h->consumed, 1, __ATOMIC_RELAXED);
         return true;
     }
 
-private:
-    bool m_warnedStale = false;
-    bool m_warnedFull  = false;
 };
 
 ShmSource g_source;

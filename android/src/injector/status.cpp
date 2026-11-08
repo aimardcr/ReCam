@@ -37,7 +37,7 @@ static bool read_ring(pid_t pid, uint32_t shmFd, recam::ShmHeader* out)
 
     const ssize_t n = pread(fd, out, sizeof(*out), 0);
     close(fd);
-    return n == static_cast<ssize_t>(sizeof(*out)) && out->magic == recam::kShmMagic;
+    return n == static_cast<ssize_t>(sizeof(*out)) && out->magic == recam::kShmMagic && out->version == recam::kShmVersion;
 }
 
 static uint64_t now_ns()
@@ -109,6 +109,7 @@ int recam::cli::status()
         printf("    \"published\": %llu,\n", static_cast<unsigned long long>(h.published));
         printf("    \"consumed\": %llu,\n", static_cast<unsigned long long>(h.consumed));
         printf("    \"dropped\": %llu,\n", static_cast<unsigned long long>(h.dropped));
+        printf("    \"producer_skipped\": %llu,\n", static_cast<unsigned long long>(h.producerSkipped));
         printf("    \"lanes\": [");
 
         bool first = true;
