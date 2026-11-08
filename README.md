@@ -114,6 +114,28 @@ python tools/package.py
 This runs `ndk-build`, bundles `recam` and `librecam.so` into the package, and writes
 `dist/ReCam`. `adb` and `ffmpeg` are not bundled and remain PATH dependencies.
 
+### Release builds
+
+The manual **Release build** GitHub Actions workflow builds Android ARM64 and
+x86_64 once, then bundles that ARM64 payload into native desktop builds for
+Windows x64/ARM64, macOS Apple Silicon/Intel, and Linux x64. Each target gets a
+separate archive; `SHA256SUMS.txt` covers all seven downloads. Windows and macOS
+use ZIP files, and Linux uses tar.gz to preserve executable permissions and links.
+The macOS builds require macOS 14 or newer and are ad-hoc signed, not notarized.
+The Linux build is produced on Ubuntu 22.04. `adb` and `ffmpeg` remain PATH
+requirements on every desktop platform.
+
+```bash
+gh workflow run release-build.yml --ref main -f version=v0.1.2
+```
+
+The workflow runs desktop tests, renders the Qt window offscreen, checks frozen
+startup, and validates executable architecture and bundled payload hashes. It
+uploads a `release-assets` artifact; tagging and publishing remain separate steps.
+Each archive includes `BUILD-INFO.json` identifying its source commit, toolchain,
+and Android payload hashes. Native archives can also be assembled locally with
+`tools/release.py` after `tools/package.py` finishes on the target OS.
+
 ## Sources
 
 The console offers five. `adb` handles the transport; `ffmpeg` does any encoding.
