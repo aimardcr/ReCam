@@ -24,6 +24,7 @@
 #include "sepolicy.hpp"
 #include "elfsym.hpp"
 #include "target.hpp"
+#include "staged_file.hpp"
 #include "../common/control.hpp"
 
 namespace tgt = recam::target;
@@ -188,19 +189,15 @@ static std::string stage_for_path_dlopen(const std::string& tgtCtx,
         return {};
     }
 
-    const std::string dst = std::string(kStageDir) + "/" + kPayloadName;
-
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd),
-             "mkdir -p '%s' && cp -f '%s' '%s' && chmod 644 '%s'",
-             kStageDir, payload.c_str(), dst.c_str(), dst.c_str());
-    if (::system(cmd) != 0) {
+    const std::string dst = recam::stage_payload_copy(payload, kStageDir);
+    if (dst.empty()) {
         KITTY_LOGW("route: could not stage the payload in %s", kStageDir);
         return {};
     }
 
     if (!sp::relabel(kStageDir, kStageLabel) || !sp::relabel(dst, kStageLabel)) {
         KITTY_LOGW("route: could not relabel %s to %s", kStageDir, kStageLabel);
+        unlink(dst.c_str());
         return {};
     }
 
@@ -339,6 +336,7 @@ int recam::cli::inject()
 
     // Before attaching, so the target is never left stopped during a patch.
     std::string stagedPath;
+    const recam::StagedFileCleanup stagedCleanup{stagedPath};
     const Route route = choose_route(pid, libPath, &stagedPath);
     if (route == Route::None) {
         KITTY_LOGE("No usable way to load the payload into %s: memfd needs a policy "
