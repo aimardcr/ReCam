@@ -10,6 +10,8 @@ substitution happens once, in the camera service, and applies to everything.
 
 Root is required.
 
+![ReCam desktop console streaming OBS Virtual Camera to an Android camera preview](assets/recam-preview.jpg)
+
 ## Legitimate use
 
 This is a tool for testing systems you own or have written authorization to test.
