@@ -25,6 +25,7 @@
 #include "elfsym.hpp"
 #include "target.hpp"
 #include "staged_file.hpp"
+#include "payload_identity.hpp"
 #include "../common/control.hpp"
 
 namespace tgt = recam::target;
@@ -334,6 +335,8 @@ int recam::cli::inject()
         return 1;
     }
 
+    const auto wantedBuild = recam::payload_build_id(libPath.c_str());
+
     // Before attaching, so the target is never left stopped during a patch.
     std::string stagedPath;
     const recam::StagedFileCleanup stagedCleanup{stagedPath};
@@ -360,13 +363,6 @@ int recam::cli::inject()
         return 1;
     cfg.seize = seized;
 
-    KittyInjector injector{};
-    if (!kmgr.initialize(pid, EK_MEM_OP_SYSCALL, true) || !injector.init(&kmgr, cfg)) {
-        KITTY_LOGE("Injector init failed.");
-        tgt::release(kmgr, pid);
-        return 1;
-    }
-
     // Exactly one payload is ever active.
     if (ctrlAddr && !tgt::shutdown_payload(kmgr, ctrlAddr)) {
         KITTY_LOGE("Could not stand down the existing payload; refusing to inject.");
@@ -378,6 +374,48 @@ int recam::cli::inject()
     const uintptr_t hookTarget = resolve_hook_target(kmgr, pid);
     if (!hookTarget) {
         KITTY_LOGE("Could not resolve the hook target; refusing to inject.");
+        tgt::release(kmgr, pid);
+        return 1;
+    }
+
+    // A dormant same-build image keeps one immutable original trampoline.
+    // Never call dlopen again or unload code that a delayed branch may enter.
+    recam::ResidentPayload resident{};
+    recam::ControlBlock dormant{};
+    if (ctrlAddr && tgt::read_control(kmgr, ctrlAddr, &dormant) &&
+        kmgr.readMem(ctrlAddr + recam::kResidentOffset, &resident, sizeof(resident)) == sizeof(resident) &&
+        resident.magic == recam::kResidentMagic && resident.init && resident.base &&
+        resident.generation == dormant.generation && resident.build == wantedBuild) {
+        int rc = 1;
+        for (unsigned attempt = 0; attempt < 25; ++attempt) {
+            const auto call = kmgr.trace.callFunction(resident.init,
+                static_cast<uintptr_t>(kINJ_SECRET_KEY), hookTarget);
+            if (call.status != KT_RP_CALL_SUCCESS) break;
+            if (static_cast<int32_t>(call.result.val) == -2 && attempt < 24) {
+                // Retirement cannot progress while borrowed/stopped threads are
+                // suspended. Resume before retrying, then verify ownership again.
+                tgt::release(kmgr, pid);
+                usleep(20000);
+                if (!tgt::attach(kmgr, pid, sdk, cfg.timeout, &seized)) return 1;
+                recam::ControlBlock check{};
+                if (!tgt::read_control(kmgr, ctrlAddr, &check) || check.active ||
+                    check.hooks_installed || check.generation != resident.generation) break;
+                continue;
+            }
+            recam::ControlBlock check{};
+            if (call.result.val == 0 && tgt::read_control(kmgr, ctrlAddr, &check) &&
+                check.active && check.hooks_installed && check.owner_base == resident.base) rc = 0;
+            break;
+        }
+        KITTY_LOGI("Resident payload %p reuse %s (no new image/trampoline).",
+                   reinterpret_cast<void*>(resident.base), rc == 0 ? "succeeded" : "failed");
+        tgt::release(kmgr, pid);
+        return rc;
+    }
+
+    KittyInjector injector{};
+    if (!injector.init(&kmgr, cfg)) {
+        KITTY_LOGE("Injector init failed.");
         tgt::release(kmgr, pid);
         return 1;
     }

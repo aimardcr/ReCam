@@ -5,12 +5,14 @@
 #include <cstdlib>
 
 static bool install_ok = true;
+static bool prepare_ok = true;
 static bool remove_ok = true;
 static unsigned installs = 0;
 static unsigned removals = 0;
 static unsigned checks = 0;
 
 namespace recam {
+bool framehook_prepare(uintptr_t) { return prepare_ok; }
 bool framehook_install(uintptr_t) { ++installs; return install_ok; }
 bool framehook_remove() { ++removals; return remove_ok; }
 bool shmsource_create(int*, uint64_t*) { return false; }
@@ -69,6 +71,19 @@ int main()
     const unsigned prior_removals = removals;
     check(recam_shutdown(kInjectorKey) == 0 && removals == prior_removals,
           "repeated shutdown is harmless");
+
+    const auto* resident = reinterpret_cast<const recam::ResidentPayload*>(
+        reinterpret_cast<const uint8_t*>(g_ctrl) + recam::kResidentOffset);
+    check(resident->magic == recam::kResidentMagic &&
+          resident->init == reinterpret_cast<uintptr_t>(&recam_init) &&
+          resident->generation == g_ctrl->generation,
+          "stopped payload retains a matching resident identity");
+    before = *g_ctrl;
+    prepare_ok = false;
+    check(recam_init(kInjectorKey, target) == -2 && !g_owner &&
+          memcmp(g_ctrl, &before, sizeof(before)) == 0,
+          "busy retirement returns retry without mutating ownership or generation");
+    prepare_ok = true;
 
     install_ok = false;
     remove_ok = false;

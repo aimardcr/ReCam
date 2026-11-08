@@ -59,7 +59,7 @@ extern "C" int recam_test_handler(int x)
 }
 
 // A prologue the hook must accept.
-void test_hookable(const char* name, TestFn fn, uint32_t expectPatchOffset)
+void test_hookable(const char* name, TestFn fn, uint32_t expectPatchOffset, InlineHook& h)
 {
     LOGI("[hook] %s", name);
 
@@ -69,7 +69,6 @@ void test_hookable(const char* name, TestFn fn, uint32_t expectPatchOffset)
     uint8_t orig[16];
     memcpy(orig, reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(fn) + expectPatchOffset), 16);
 
-    InlineHook h;
     g_hits = 0;
     HookResult r = hook_install(reinterpret_cast<uintptr_t>(fn),
                                 reinterpret_cast<void*>(&recam_test_handler), &h);
@@ -579,9 +578,12 @@ int selftest_run()
     g_pass = g_fail = 0;
     LOGI("================ ReCam self-test ================");
 
-    test_hookable("plain prologue",        recam_test_plain, 0);
-    test_hookable("BTI landing pad",       recam_test_bti,   4);
-    test_hookable("PACIASP prologue",      recam_test_pac,   0);
+    // Self-tests also run repeatedly in a resident image. Keep one immutable
+    // trampoline per target rather than exhausting the fixed arena over time.
+    static InlineHook testHooks[3];
+    test_hookable("plain prologue",        recam_test_plain, 0, testHooks[0]);
+    test_hookable("BTI landing pad",       recam_test_bti,   4, testHooks[1]);
+    test_hookable("PACIASP prologue",      recam_test_pac,   0, testHooks[2]);
     test_refused ("ADRP in prologue",      recam_test_adrp);
     test_refused ("LDR literal in prologue", recam_test_ldrlit);
 

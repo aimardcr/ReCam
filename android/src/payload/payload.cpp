@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "../common/control.hpp"
+#include "../common/resident.hpp"
 #include "framehook.hpp"
 #include "shmsource.hpp"
 
@@ -97,6 +98,25 @@ static uintptr_t self_base()
     if (dladdr(reinterpret_cast<void*>(&self_base), &info) && info.dli_fbase)
         return reinterpret_cast<uintptr_t>(info.dli_fbase);
     return 0;
+}
+
+static recam::PayloadBuildId self_build_id()
+{
+    struct Search { uintptr_t base; recam::PayloadBuildId id; } search{self_base(), {}};
+    dl_iterate_phdr([](dl_phdr_info* info, size_t, void* opaque) {
+        auto* s = static_cast<Search*>(opaque);
+        if (info->dlpi_addr != s->base) return 0;
+        for (size_t i = 0; i < info->dlpi_phnum; ++i) {
+            const auto& ph = info->dlpi_phdr[i];
+            if (ph.p_type == PT_NOTE) {
+                s->id = recam::build_id_notes(reinterpret_cast<const void*>(
+                    info->dlpi_addr + ph.p_vaddr), ph.p_memsz);
+                if (s->id.size) break;
+            }
+        }
+        return 1;
+    }, &search);
+    return search.id;
 }
 
 // --------------------------------------------------------------------------- hooks
@@ -246,6 +266,10 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
         return -1;
     }
 
+    if (!recam::framehook_prepare(hookTarget)) {
+        LOGW("recam_init: callbacks still retiring or hook target changed; retry after resume");
+        return -2;
+    }
     g_ctrl = c;
     g_owner = true;
 
@@ -288,6 +312,11 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
     }
     c->hooks_installed = 1;
 
+    // Only this extension advertises reuse; older v2 payloads leave it zero.
+    auto* resident = reinterpret_cast<recam::ResidentPayload*>(
+        reinterpret_cast<uint8_t*>(c) + recam::kResidentOffset);
+    *resident = {recam::kResidentMagic, self_base(),
+                 reinterpret_cast<uint64_t>(&recam_init), c->generation, self_build_id()};
     LOGI("recam_init: done");
     return 0;
 }

@@ -23,7 +23,7 @@ bool bufferlock_acquire_handle(const void*, int32_t, int32_t, int32_t, LockedBuf
 void bufferlock_release(LockedBuffer*) {}
 FrameSource* shmsource_get() { return nullptr; }
 FrameSource* colorbars_source() { return nullptr; }
-HookResult hook_install(uintptr_t, void*, InlineHook*) { return HookResult::Ok; }
+HookResult hook_install(uintptr_t, void*, InlineHook* h) { h->installed = true; return HookResult::Ok; }
 HookResult hook_remove(InlineHook* hook) { if (!remove_ok) return HookResult::TextWriteFailed; hook->installed = false; return HookResult::Ok; }
 const char* hook_result_str(HookResult) { return "test"; }
 }
@@ -65,7 +65,7 @@ int main() {
     assert(recam::framehook_remove() && recam::destroyed == 1);
     // Exercise the last-callback election with multiple simultaneously held
     // references. Only the last departure may reclaim, exactly once.
-    recam::g_enabled=1;recam::g_retiring=recam::g_reclaimed=0;recam::destroyed=0;
+    recam::g_enabled=1;recam::g_lifecycle=recam::Running;recam::destroyed=0;
     recam::g_hook.installed=true;
     std::atomic<unsigned> arrived{0};std::atomic<bool> leave{false};
     std::vector<std::thread> threads;
@@ -77,8 +77,27 @@ int main() {
     assert(recam::framehook_remove() && recam::destroyed==0);
     leave=true;for(auto& thread:threads)thread.join();
     assert(recam::destroyed==1 && recam::g_callbacks==0);
+    // Reuse the immutable original after retirement. Old, delayed callbacks can
+    // enter during prepare but must neither substitute nor destroy a new ring.
+    recam::g_hook.target = 0x1000;
+    assert(!recam::framehook_prepare(0x2000));
+    assert(recam::framehook_prepare(0x1000));
+    assert(recam::recam_on_return_buffer(nullptr, &buffer, 0, 0, 0, 0, 0, 0) == 42);
+    assert(recam::destroyed == 1 && recam::g_lifecycle == recam::Preparing);
+    for (unsigned i = 0; i < 100; ++i) {
+        assert(recam::framehook_install(0x1000));
+        assert(recam::g_orig == original);
+        {
+            recam::CallbackScope scope;
+            assert(recam::framehook_remove());
+            assert(!recam::framehook_prepare(0x1000));
+        }
+        assert(recam::g_lifecycle == recam::Dormant);
+        assert(recam::destroyed == i + 2);
+        assert(recam::framehook_prepare(0x1000));
+    }
     // A never-installed image can release a failed-init ring without retirement.
-    recam::g_orig=nullptr;recam::g_retiring=0;
-    assert(recam::framehook_remove() && recam::g_retiring==0);
+    recam::g_orig=nullptr;recam::g_lifecycle=recam::Running;
+    assert(recam::framehook_remove() && recam::g_lifecycle==recam::Dormant);
     puts("in-flight shutdown, failure preservation, and concurrent reclamation checks passed");
 }

@@ -78,16 +78,25 @@ const char*  g_lastSourceName = nullptr;
 
 // Sequentially consistent admission/counting ensures a callback either holds a
 // reference before retirement observes zero, or observes disabled substitution.
-uint32_t g_callbacks = 0, g_enabled = 0, g_retiring = 0, g_reclaimed = 0;
+uint32_t g_callbacks = 0, g_enabled = 0;
+enum : uint32_t { Running, Retiring, Reclaiming, Dormant, Preparing };
+uint32_t g_lifecycle = Running;
 
 void reclaim_ring_if_idle()
 {
-    if (!__atomic_load_n(&g_retiring, __ATOMIC_SEQ_CST) ||
-        __atomic_load_n(&g_callbacks, __ATOMIC_SEQ_CST) != 0) return;
-    uint32_t expected = 0;
-    if (__atomic_compare_exchange_n(&g_reclaimed, &expected, 1, false,
-                                     __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
+    for (;;) {
+        if (__atomic_load_n(&g_callbacks, __ATOMIC_SEQ_CST) != 0) return;
+        uint32_t expected = Retiring;
+        if (!__atomic_compare_exchange_n(&g_lifecycle, &expected, Reclaiming, false,
+                                          __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) return;
+        if (__atomic_load_n(&g_callbacks, __ATOMIC_SEQ_CST) != 0) {
+            __atomic_store_n(&g_lifecycle, Retiring, __ATOMIC_SEQ_CST);
+            continue; // closes the last-disabled-callback election race
+        }
         shmsource_destroy();
+        __atomic_store_n(&g_lifecycle, Dormant, __ATOMIC_SEQ_CST);
+        return;
+    }
 }
 
 struct CallbackScope {
@@ -254,16 +263,23 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
 
 }  // namespace
 
+// No waiting on camera threads: the injector may have borrowed one of them.
+// A late disabled callback only uses the immutable original trampoline.
+bool framehook_prepare(uintptr_t target)
+{
+    if (g_hook.target && g_hook.target != target) return false;
+    if (__atomic_load_n(&g_callbacks, __ATOMIC_SEQ_CST) != 0) return false;
+    uint32_t state = __atomic_load_n(&g_lifecycle, __ATOMIC_SEQ_CST);
+    if (state != Dormant && !(state == Running && !g_orig)) return false;
+    return __atomic_compare_exchange_n(&g_lifecycle, &state, Preparing, false,
+                                       __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
 bool framehook_install(uintptr_t target)
 {
     if (g_hook.installed) {
         LOGW("framehook: already installed");
         return true;
-    }
-    // A retired image remains mapped for old callbacks; install a fresh copy.
-    if (__atomic_load_n(&g_retiring, __ATOMIC_SEQ_CST)) {
-        LOGE("framehook: cannot reinstall a retired image");
-        return false;
     }
     if (!target) {
         LOGE("framehook: injector supplied no target address");
@@ -277,7 +293,7 @@ bool framehook_install(uintptr_t target)
         return false;
     }
 
-    g_orig = reinterpret_cast<TargetFn>(g_hook.trampoline);
+    if (!g_orig) g_orig = reinterpret_cast<TargetFn>(g_hook.trampoline);
     g_frames = 0;
     g_substituted = 0;
     g_passedThrough = 0;
@@ -287,10 +303,9 @@ bool framehook_install(uintptr_t target)
     if (bufferlock_init()) {
         g_shm  = shmsource_get();
         g_bars = colorbars_source();
-    } else {
-        g_shm = g_bars = nullptr;
     }
     g_lastSourceName = nullptr;
+    __atomic_store_n(&g_lifecycle, Running, __ATOMIC_SEQ_CST);
     __atomic_store_n(&g_enabled, 1, __ATOMIC_SEQ_CST);
     LOGI("framehook: sources = %s + %s",
          g_shm ? "shm" : "(no shm)", g_bars ? "colorbars" : "(none)");
@@ -306,6 +321,7 @@ bool framehook_remove()
     // ring synchronously and leave this image eligible for an initialization retry.
     if (!g_hook.installed && !g_orig) {
         shmsource_destroy();
+        __atomic_store_n(&g_lifecycle, Dormant, __ATOMIC_SEQ_CST);
         return true;
     }
     if (g_hook.installed) {
@@ -316,7 +332,10 @@ bool framehook_remove()
         }
     }
     __atomic_store_n(&g_enabled, 0, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&g_retiring, 1, __ATOMIC_SEQ_CST);
+    // Repeated stop must not retire (and destroy) an already dormant ring again.
+    uint32_t state = __atomic_load_n(&g_lifecycle, __ATOMIC_SEQ_CST);
+    if (state == Running || state == Preparing)
+        __atomic_store_n(&g_lifecycle, Retiring, __ATOMIC_SEQ_CST);
     // Never wait here: the injector can borrow a thread already in our callback.
     // Its eventual scope exit reclaims the ring if other callbacks still use it.
     reclaim_ring_if_idle();

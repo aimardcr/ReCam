@@ -128,6 +128,21 @@ HookResult hook_install(uintptr_t target, void* replacement, InlineHook* h)
 {
     if (!target || !replacement || !h || h->installed) return HookResult::BadArgs;
 
+    // Reinstall the same entry jump without reallocating or rewriting a
+    // trampoline that a delayed callback may still execute.
+    if (h->trampoline) {
+        if (h->target != target ||
+            !verify_text(target + h->patchOffset, h->saved, h->patchLen))
+            return HookResult::BadArgs;
+        uint8_t patch[sizeof(h->saved)];
+        memset(patch, 0x90, sizeof(patch));
+        write_abs_jump(patch, reinterpret_cast<uintptr_t>(replacement));
+        if (!patch_text(target + h->patchOffset, patch, h->patchLen))
+            return HookResult::TextWriteFailed;
+        h->installed = true;
+        return HookResult::Ok;
+    }
+
     const uint32_t* code = reinterpret_cast<const uint32_t*>(target);
 
     // A BTI landing pad must stay at the entry; patch after it.
