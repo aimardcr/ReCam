@@ -105,7 +105,7 @@ static void start_listener()
         return;
     }
     KITTY_LOGI("feed: listening on 127.0.0.1:%u - adb forward tcp:%u tcp:%u, then send "
-               "Annex-B H.264", kListenPort, kListenPort, kListenPort);
+               "H.264 in FLV or Annex-B", kListenPort, kListenPort, kListenPort);
 }
 
 // A live stream outranks the file; hanging up falls straight back to it.
@@ -252,10 +252,15 @@ static Outcome attach_and_feed()
     KITTY_LOGI("feed: source = %s, plus anything that connects. Ctrl-C to stop.",
                g_haveVideo ? "decoded video" : "built-in test pattern");
 
+    const char* profileEnv = getenv("RECAM_PROFILE");
+    const bool profiling = profileEnv && strcmp(profileEnv, "1") == 0;
+    __atomic_store_n(&h->profiling, profiling ? 1u : 0u, __ATOMIC_RELEASE);
+
     uint64_t frameNo = 0;
     uint64_t lastLog = 0;
     uint64_t lastCheck = now_ns();
     uint64_t deadline = now_ns();
+    uint64_t lastLiveFrameNs = deadline;
     Outcome out = Outcome::Stopped;
 
     const uint64_t intervalNs = g_haveVideo
@@ -265,7 +270,9 @@ static Outcome attach_and_feed()
     while (!g_stop) {
         service_lanes(h, now_ns());
 
+        const bool wasLive = g_streamLive;
         poll_listener();
+        if (!wasLive && g_streamLive) lastLiveFrameNs = now_ns();
 
         // One decode feeds every lane; only the scale is paid per size.
         recam::SrcFrame src;
@@ -274,20 +281,35 @@ static Outcome attach_and_feed()
 
         if (g_streamLive) {
             haveSrc = g_stream.next(&src);
-            if (haveSrc) used = &g_stream;
-            if (g_stream.stream_ended()) {
+            if (haveSrc) {
+                used = &g_stream;
+                lastLiveFrameNs = now_ns();
+                deadline = lastLiveFrameNs;
+            }
+            // A returned frame owns pointers into the decoder: close only after
+            // scaling it, even when EOF arrived in the same pump.
+            if (g_stream.stream_ended() && !haveSrc) {
                 KITTY_LOGI("feed: the sender hung up; falling back");
                 g_stream.close();
                 g_streamLive = false;
+                deadline = now_ns();
             }
         }
-        if (!haveSrc && g_haveVideo) {
+        const uint64_t now = now_ns();
+        const bool fallbackDue = !haveSrc && (!g_streamLive ||
+            (now - lastLiveFrameNs >= 2000000000ull && now >= deadline));
+        if (fallbackDue && g_streamLive && now > deadline + intervalNs)
+            deadline = now; // restart the fallback clock after a live gap
+        if (fallbackDue && g_haveVideo) {
             haveSrc = g_decoder.next(&src);
             if (haveSrc) used = &g_decoder;
         }
 
+        // A live stream with no new output leaves the last publication intact.
+        // Never replace it with a pattern merely because decoding is asynchronous.
+        const bool publishFrame = haveSrc || fallbackDue;
         uint32_t served = 0;
-        for (uint32_t i = 0; i < recam::kShmLanes; i++) {
+        for (uint32_t i = 0; publishFrame && i < recam::kShmLanes; i++) {
             recam::ShmLane& l = h->lane[i];
             const uint32_t lw = l.width, lh = l.height;
             if (!lw || !lh || lw != l.reqWidth || lh != l.reqHeight) continue;
@@ -295,6 +317,7 @@ static Outcome attach_and_feed()
             uint8_t* buf = static_cast<uint8_t*>(base) + l.dataOffset +
                            (l.published % recam::kLaneBufs) * l.bufBytes;
 
+            const uint64_t scaleStart = profiling ? now_ns() : 0;
             if (haveSrc) {
                 if (!recam::scale_to_i420(src, buf, lw, lh)) continue;
             } else {
@@ -302,13 +325,33 @@ static Outcome attach_and_feed()
             }
 
             // Publish only after the pixels are in place.
-            __atomic_store_n(&l.publishedNs, now_ns(), __ATOMIC_RELEASE);
-            __atomic_add_fetch(&l.published, 1, __ATOMIC_RELEASE);
+            const uint64_t publishedNs = now_ns();
+            __atomic_store_n(&l.publishedNs, publishedNs, __ATOMIC_RELEASE);
+            const uint64_t seq = __atomic_add_fetch(&l.published, 1, __ATOMIC_RELEASE);
+            if (profiling && haveSrc && used == &g_stream && src.timing.receivedNs) {
+                const auto& t = src.timing;
+                __android_log_print(ANDROID_LOG_INFO, "ReCamLatency",
+                    "event=publish lane=%u seq=%llu width=%u height=%u wire=%llu receive=%llu queue=%llu decode=%llu copy=%llu scale=%llu publish=%llu",
+                    i, (unsigned long long)seq, lw, lh, (unsigned long long)t.wireOffset,
+                    (unsigned long long)t.receivedNs, (unsigned long long)t.queuedNs,
+                    (unsigned long long)t.decodedNs, (unsigned long long)t.copiedNs,
+                    (unsigned long long)scaleStart, (unsigned long long)publishedNs);
+            }
             served++;
         }
         if (used) used->release();
 
-        frameNo++;
+        if (publishFrame) frameNo++;
+        if (g_streamLive && g_stream.stream_ended()) {
+            g_stream.close();
+            g_streamLive = false;
+            deadline = now_ns();
+        }
+        if (g_streamLive && fallbackDue) {
+            deadline += intervalNs;
+            const uint64_t after = now_ns();
+            if (deadline < after) deadline = after;
+        }
         __atomic_add_fetch(&h->published, served, __ATOMIC_RELAXED);
 
         // A re-injected payload creates a new memfd; this mapping goes stale.
@@ -330,13 +373,21 @@ static Outcome attach_and_feed()
                        static_cast<unsigned long long>(h->dropped), served);
         }
 
-        // Sleep only the remainder: decode and scale already consumed part of the tick.
+        if (g_streamLive) {
+            // Socket readiness wakes us immediately; codec output is checked with
+            // a 2 ms poll timeout. Live publication is not tied to the file tick.
+            if (!haveSrc) g_stream.wait_stream(2);
+            continue;
+        }
+
+        // File/pattern playback retains its original tick.
         deadline += intervalNs;
         const uint64_t after = now_ns();
         if (deadline > after) usleep(static_cast<useconds_t>((deadline - after) / 1000));
         else                  deadline = after;   // behind: drop the debt, do not spiral
     }
 
+    __atomic_store_n(&h->profiling, 0u, __ATOMIC_RELEASE);
     munmap(base, cb.shm_size);
     if (out == Outcome::Stopped)
         KITTY_LOGI("feed: stopping after %llu frames. The payload falls back to colour "

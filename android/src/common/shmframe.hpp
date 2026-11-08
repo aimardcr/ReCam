@@ -8,7 +8,7 @@ namespace recam {
 
 // "RECAMSHM" little-endian.
 static const uint64_t kShmMagic   = 0x4D48534D41434552ULL;
-static const uint32_t kShmVersion = 2;
+static const uint32_t kShmVersion = 3;
 
 // Distinct camera buffer sizes served at once; a session rarely opens more.
 static const uint32_t kShmLanes = 4;
@@ -50,7 +50,12 @@ struct ShmHeader {
     volatile uint64_t dropped;
 
     ShmLane lane[kShmLanes];
+
+    // Opt-in per-frame logging, enabled by RECAM_PROFILE=1 in the feeder.
+    uint32_t profiling;
 };
+
+static_assert(sizeof(ShmHeader) <= kShmArenaBase, "header exceeds reserved page");
 
 inline uint32_t lane_frame_bytes(uint32_t w, uint32_t h) { return w * h * 3 / 2; }
 

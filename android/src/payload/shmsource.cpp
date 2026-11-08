@@ -153,7 +153,10 @@ public:
                              static_cast<uint64_t>((seq - 1) % kLaneBufs) * l->bufBytes;
         if (off + l->bufBytes > g_size) return false;
 
+        const bool profiling = __atomic_load_n(&h->profiling, __ATOMIC_ACQUIRE) != 0;
+        const uint64_t copyStart = profiling ? now_ns() : 0;
         if (!blit_i420(g_base + off, w, hh, t)) return false;
+        const uint64_t copyEnd = profiling ? now_ns() : 0;
 
         // Producer lapped us mid-copy: the frame we wrote is torn.
         if (__atomic_load_n(&l->published, __ATOMIC_ACQUIRE) - seq >= kLaneBufs) {
@@ -161,6 +164,12 @@ public:
             return false;
         }
 
+        if (profiling) {
+            __android_log_print(ANDROID_LOG_INFO, "ReCamLatency",
+                "event=consume lane=%u seq=%llu start=%llu end=%llu",
+                static_cast<unsigned>(l - h->lane), (unsigned long long)seq,
+                (unsigned long long)copyStart, (unsigned long long)copyEnd);
+        }
         h->consumed = h->consumed + 1;
         return true;
     }

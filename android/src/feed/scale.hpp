@@ -3,6 +3,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "latency.hpp"
 
 namespace recam {
 
@@ -17,6 +18,7 @@ struct SrcFrame {
     SrcPlane y, cb, cr;
     int32_t  width  = 0;
     int32_t  height = 0;
+    FrameTiming timing{};
 };
 
 // Writes exactly dstW x dstH packed I420. dstW and dstH must be even.

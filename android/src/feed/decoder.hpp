@@ -19,9 +19,13 @@ public:
 
     void close();
 
-    // Acquire the next frame; its planes stay valid until release(). Loops at EOS.
+    // Live: newest ready frame, or false if none. File: next frame, looping at EOS.
+    // Returned planes stay valid until release() or close().
     bool next(SrcFrame* out);
     void release();
+
+    // Sleep until socket input is ready, with a bounded codec-poll interval.
+    void wait_stream(int timeoutMs);
 
     // The peer hung up, so the caller should fall back to its other source.
     bool stream_ended() const;
@@ -33,7 +37,11 @@ public:
 private:
     bool pump();
     bool pump_stream();
-    bool drain_output(const char* source);
+    void pump_annexb();
+    void pump_flv();
+    bool drain_output(const char* source, int64_t timeoutUs = 2000,
+                      bool* progressed = nullptr);
+    void drain_available();
     bool update_output_format(const char* source);
     bool describe_frame(SrcFrame* out);
     bool queue_au();

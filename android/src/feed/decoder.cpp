@@ -1,5 +1,6 @@
 #include "decoder.hpp"
 #include "h264.hpp"
+#include "flv.hpp"
 
 #include <media/NdkMediaCodec.h>
 #include <media/NdkMediaExtractor.h>
@@ -9,7 +10,10 @@
 #include <errno.h>
 #include <time.h>
 #include <vector>
+#include <map>
+#include <cstdlib>
 #include <fcntl.h>
+#include <poll.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -78,6 +82,11 @@ struct VideoDecoder::Impl {
     // Stream mode. sock >= 0 means input arrives over the wire, not from `ex`.
     int                  sock  = -1;
     bool                 ended = false;
+    bool                 readClosed = false;
+    uint64_t             eofNs = 0;
+    int                  transport = 0; // 0 undecided, 1 Annex-B, 2 FLV/AVC
+    bool                 flvHeader = false;
+    unsigned             nalLengthBytes = 0;
     std::vector<uint8_t> buf;              // undecoded Annex-B bytes
     std::vector<uint8_t> sps, pps;         // csd-0 and csd-1, once seen
     bool                 started = false;  // codec configured and running
@@ -86,6 +95,11 @@ struct VideoDecoder::Impl {
     uint64_t qIn = 0, qOut = 0, qImg = 0, lastStatNs = 0;
     bool     warnedFit = false;
     bool     warnedBacklog = false;
+    bool profiling = [] { const char* p = getenv("RECAM_PROFILE"); return p && strcmp(p, "1") == 0; }();
+    ByteTimeline arrival;
+    FrameTiming assembling{}, outputTiming{};
+    std::map<int64_t, FrameTiming> pending;
+
 };
 
 VideoDecoder::~VideoDecoder() { close(); }
@@ -206,7 +220,7 @@ bool VideoDecoder::open_stream(int fd)
     fcntl(fd, F_SETFL, (fl < 0 ? 0 : fl) | O_NONBLOCK);
 
     mIntervalUs = 33333;   // no VUI in most streams; the sender paces anyway
-    KITTY_LOGI("decoder: reading an Annex-B H.264 stream, waiting for SPS/PPS");
+    KITTY_LOGI("decoder: reading H.264 (Annex-B or FLV), waiting for SPS/PPS");
     return true;
 }
 
@@ -267,7 +281,7 @@ bool VideoDecoder::queue_au()
     Impl* d = mImpl;
     if (d->au.empty()) return true;
 
-    const ssize_t in = AMediaCodec_dequeueInputBuffer(d->codec, 2000);
+    const ssize_t in = AMediaCodec_dequeueInputBuffer(d->codec, 0);
     if (in < 0) return false;
 
     size_t cap = 0;
@@ -280,30 +294,47 @@ bool VideoDecoder::queue_au()
                        d->au.size(), cap);
         }
         AMediaCodec_queueInputBuffer(d->codec, in, 0, 0, d->ptsUs, 0);
+        d->ended = true; // a missing reference picture invalidates subsequent AUs
+        return false;
     } else {
         memcpy(dst, d->au.data(), d->au.size());
-        AMediaCodec_queueInputBuffer(d->codec, in, 0, d->au.size(), d->ptsUs, 0);
+        const uint64_t queued = d->profiling ? mono_ns() : 0;
+        const auto rc = AMediaCodec_queueInputBuffer(d->codec, in, 0, d->au.size(), d->ptsUs, 0);
+        if (rc != AMEDIA_OK) {
+            KITTY_LOGE("decoder: queue input failed (%d); closing stream", rc);
+            d->ended = true;
+            return false;
+        }
+        if (d->profiling && d->assembling.receivedNs) {
+            d->assembling.queuedNs = queued;
+            d->pending[d->ptsUs] = d->assembling;
+            // Diagnostics cannot grow without bound if output stalls.
+            if (d->pending.size() > 256) d->pending.erase(d->pending.begin());
+        }
         d->qIn++;
     }
 
     d->ptsUs += mIntervalUs;
     d->au.clear();
+    d->assembling = {};
     return true;
 }
 
-// Drain the socket, then hand whole pictures to the codec.
+// Alternate nonblocking output drains with input submission to avoid backpressure.
 bool VideoDecoder::pump_stream()
 {
     Impl* d = mImpl;
+    if (d->started) drain_available();
 
     uint8_t chunk[65536];
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8 && !d->readClosed; i++) {
         const ssize_t n = ::read(d->sock, chunk, sizeof(chunk));
         if (n > 0) {
+            if (d->profiling) d->arrival.append(static_cast<uint64_t>(n), mono_ns());
             d->buf.insert(d->buf.end(), chunk, chunk + n);
             continue;
         }
-        if (n == 0) { d->ended = true; break; }
+        if (n == 0) { d->readClosed = true; d->eofNs = mono_ns(); break; }
         if (errno == EINTR) continue;
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             KITTY_LOGW("decoder: stream read: %s", strerror(errno));
@@ -312,11 +343,64 @@ bool VideoDecoder::pump_stream()
         break;
     }
 
+    if (!d->transport && d->buf.size() >= 3) {
+        if (!memcmp(d->buf.data(), "FLV", 3)) d->transport = 2;
+        else if (d->buf[0] == 0) d->transport = 1;
+        else { KITTY_LOGE("decoder: unsupported transport"); d->ended = true; }
+    }
+    if (!d->ended && d->transport == 2) pump_flv();
+    else if (!d->ended && d->transport == 1) pump_annexb();
+    if (d->ended) return d->frameReady;
+
+    if (d->readClosed) {
+        if (!d->started) { d->ended = true; return false; }
+        if (d->buf.empty() && d->au.empty() && !d->inputEos) {
+            const ssize_t slot = AMediaCodec_dequeueInputBuffer(d->codec, 0);
+            if (slot >= 0) {
+                if (AMediaCodec_queueInputBuffer(d->codec, slot, 0, 0, d->ptsUs,
+                        AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) != AMEDIA_OK) d->ended = true;
+                else d->inputEos = true;
+            }
+        }
+        if (mono_ns() - d->eofNs > 2000000000ull) {
+            KITTY_LOGW("decoder: output EOS timed out; closing stream");
+            d->ended = true;
+        }
+    }
+
+    // Do not discard reference pictures and then continue a dependent stream.
+    if (d->buf.size() + d->au.size() > kMaxBacklog) {
+        if (!d->warnedBacklog) {
+            d->warnedBacklog = true;
+            KITTY_LOGW("decoder: %zu bytes backed up; closing stream for a fresh connection", d->buf.size() + d->au.size());
+        }
+        d->ended = true;
+        return d->frameReady;
+    }
+
+    if (!d->started) return false;
+
+    drain_available();
+
+    const uint64_t nowNs = mono_ns();
+    if (nowNs - d->lastStatNs > 5ull * 1000 * 1000 * 1000) {
+        d->lastStatNs = nowNs;
+        KITTY_LOGI("decoder: stream pictures in=%llu out=%llu shown=%llu, %zu bytes queued",
+                   static_cast<unsigned long long>(d->qIn),
+                   static_cast<unsigned long long>(d->qOut),
+                   static_cast<unsigned long long>(d->qImg), d->buf.size());
+    }
+    return d->frameReady;
+}
+
+void VideoDecoder::pump_annexb()
+{
+    Impl* d = mImpl;
     // Keep the tail: a start code may be split across two reads.
     size_t pos = 0, consumed = 0;
     h264::Nal nal;
     while (h264::next_nal(d->buf.data(), d->buf.size(), &pos, &nal)) {
-        if (pos >= d->buf.size() && !d->ended) break;   // last NAL may be incomplete
+        if (pos >= d->buf.size() && !d->readClosed) break;   // last NAL may be incomplete
 
         if (nal.type == h264::kNalSps && d->sps.empty())
             d->sps.assign(nal.data, nal.data + nal.size);
@@ -328,7 +412,15 @@ bool VideoDecoder::pump_stream()
         // Sliced-thread encoders split one picture across several slice NALs.
         if (h264::is_vcl(nal.type) && h264::starts_picture(nal.data, nal.size) &&
             !d->au.empty()) {
-            if (!queue_au()) break;   // no input slot; the NAL stays for the next tick
+            // Output buffers must be released before asking for more input slots.
+            drain_available();
+            if (!queue_au()) break;   // keep the complete AU and retry next poll
+            drain_available();
+        }
+
+        if (d->profiling && h264::is_vcl(nal.type) && !d->assembling.receivedNs) {
+            d->assembling.wireOffset = d->arrival.consumed + (nal.data - d->buf.data());
+            d->assembling.receivedNs = d->arrival.at(d->assembling.wireOffset);
         }
 
         // Parameter sets already went in as csd; re-sending them is harmless noise.
@@ -341,31 +433,78 @@ bool VideoDecoder::pump_stream()
         consumed = pos;
     }
 
-    if (consumed) d->buf.erase(d->buf.begin(), d->buf.begin() + consumed);
+    if (consumed) {
+        d->buf.erase(d->buf.begin(), d->buf.begin() + consumed);
+        if (d->profiling) d->arrival.discard(consumed);
+    }
 
-    // Nothing is draining, so drop the backlog and resync on the next IDR.
-    if (d->buf.size() > kMaxBacklog) {
-        if (!d->warnedBacklog) {
-            d->warnedBacklog = true;
-            KITTY_LOGW("decoder: %zu bytes backed up; dropping to resync", d->buf.size());
+    if (d->readClosed && d->buf.empty() && d->started && !d->au.empty()) {
+        drain_available();
+        queue_au();
+    }
+}
+
+void VideoDecoder::pump_flv()
+{
+    Impl* d = mImpl;
+    auto invalid = [&] {
+        KITTY_LOGE("decoder: invalid or unsupported FLV/AVC stream; closing connection");
+        d->ended = true;
+    };
+    auto discard = [&](size_t n) {
+        d->buf.erase(d->buf.begin(), d->buf.begin() + n);
+        if (d->profiling) d->arrival.discard(n);
+    };
+    if (!d->au.empty()) {
+        drain_available();
+        if (!queue_au()) return; // retain the whole picture until input is available
+    }
+    if (!d->flvHeader) {
+        size_t n = 0;
+        const auto r = flv::header(d->buf.data(), d->buf.size(), n);
+        if (r != flv::Result::Ready) {
+            if (r == flv::Result::Invalid || d->readClosed) invalid();
+            return;
         }
-        d->buf.clear();
-        d->au.clear();
+        discard(n);
+        d->flvHeader = true;
     }
-
-    if (!d->started) return false;
-
-    const bool gotFrame = drain_output("stream");
-
-    const uint64_t nowNs = mono_ns();
-    if (nowNs - d->lastStatNs > 5ull * 1000 * 1000 * 1000) {
-        d->lastStatNs = nowNs;
-        KITTY_LOGI("decoder: stream pictures in=%llu out=%llu shown=%llu, %zu bytes queued",
-                   static_cast<unsigned long long>(d->qIn),
-                   static_cast<unsigned long long>(d->qOut),
-                   static_cast<unsigned long long>(d->qImg), d->buf.size());
+    while (!d->buf.empty() && !d->ended) {
+        flv::Tag tag{};
+        const auto r = flv::tag(d->buf.data(), d->buf.size(), tag);
+        if (r != flv::Result::Ready) {
+            if (r == flv::Result::Invalid || d->readClosed) invalid();
+            return;
+        }
+        if (tag.type == 9) {
+            const auto* p = tag.data;
+            if (tag.size < 5 || (p[0] & 15) != 7 || (p[0] >> 4) < 1 ||
+                (p[0] >> 4) > 2 || flv::be(p + 2, 3) != 0) { invalid(); return; }
+            if (p[1] == 0) {
+                std::vector<uint8_t> sps, pps;
+                unsigned width = 0;
+                if (!flv::config(p + 5, tag.size - 5, width, sps, pps) ||
+                    (d->started && (sps != d->sps || pps != d->pps))) { invalid(); return; }
+                d->sps = std::move(sps); d->pps = std::move(pps);
+                d->nalLengthBytes = width;
+                if (!d->started && !start_codec_from_csd()) { invalid(); return; }
+            } else if (p[1] == 1) {
+                size_t vcl = 0;
+                if (!d->started || !flv::picture(p + 5, tag.size - 5, d->nalLengthBytes,
+                                                 d->au, vcl)) { invalid(); return; }
+                if (d->profiling) {
+                    d->assembling.wireOffset = d->arrival.consumed + 11 + 5 + vcl;
+                    d->assembling.receivedNs = d->arrival.at(d->assembling.wireOffset);
+                }
+            } else if (p[1] != 2 || tag.size != 5) { invalid(); return; }
+        }
+        discard(tag.bytes);
+        if (!d->au.empty()) {
+            drain_available();
+            if (!queue_au()) return;
+            drain_available();
+        }
     }
-    return gotFrame;
 }
 
 void VideoDecoder::rewind()
@@ -463,16 +602,30 @@ bool VideoDecoder::update_output_format(const char* source)
     return d->formatReady;
 }
 
-bool VideoDecoder::drain_output(const char* source)
+bool VideoDecoder::drain_output(const char* source, int64_t timeoutUs, bool* progressed)
 {
     Impl* d = mImpl;
     AMediaCodecBufferInfo info{};
-    const ssize_t out = AMediaCodec_dequeueOutputBuffer(d->codec, &info, 2000);
+    if (progressed) *progressed = false;
+    const ssize_t out = AMediaCodec_dequeueOutputBuffer(d->codec, &info, timeoutUs);
     if (out == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+        if (progressed) *progressed = true;
+        d->frameReady = false; // an older frame has the old plane geometry
         update_output_format(source);
         return false;
     }
     if (out < 0) return false;
+    if (progressed) *progressed = true;
+    if (d->sock >= 0 && (info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM)) d->ended = true;
+    FrameTiming timing{};
+    if (d->profiling) {
+        auto it = d->pending.find(info.presentationTimeUs);
+        if (it != d->pending.end()) {
+            timing = it->second;
+            timing.decodedNs = mono_ns();
+            d->pending.erase(it);
+        }
+    }
 
     if (!d->formatSeen) update_output_format(source);
 
@@ -484,9 +637,11 @@ bool VideoDecoder::drain_output(const char* source)
     bool copied = false;
     if (validRange) {
         d->frame.assign(data + offset, data + offset + size);
+        if (d->profiling) timing.copiedNs = mono_ns();
+        d->outputTiming = timing;
         d->frameReady = true;
         copied = true;
-    } else if (!d->warnedOutput) {
+    } else if (!d->warnedOutput && !(info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM)) {
         d->warnedOutput = true;
         KITTY_LOGE("decoder: %s returned an invalid output range (%d+%d of %zu)",
                    source, info.offset, info.size, bytes);
@@ -495,6 +650,27 @@ bool VideoDecoder::drain_output(const char* source)
     AMediaCodec_releaseOutputBuffer(d->codec, static_cast<size_t>(out), false);
     d->qOut++;
     return copied;
+}
+
+void VideoDecoder::drain_available()
+{
+    // Bound work under an unusually deep output queue. Only the newest copied
+    // output is exposed to the caller; every codec buffer is released promptly.
+    for (int i = 0; i < 64; ++i) {
+        bool progressed = false;
+        drain_output("stream", 0, &progressed);
+        if (!progressed) break;
+    }
+}
+
+void VideoDecoder::wait_stream(int timeoutMs)
+{
+    if (!mImpl || mImpl->sock < 0) return;
+    if (mImpl->readClosed) { usleep(static_cast<useconds_t>(timeoutMs * 1000)); return; }
+    pollfd fd{mImpl->sock, POLLIN, 0};
+    // MediaCodec's synchronous API has no pollable output fd. Recheck it within
+    // timeoutMs even when the sender has no more bytes ready.
+    poll(&fd, 1, timeoutMs);
 }
 
 bool VideoDecoder::describe_frame(SrcFrame* out)
@@ -548,6 +724,7 @@ bool VideoDecoder::describe_frame(SrcFrame* out)
     }
 
     const uint8_t* base = d->frame.data();
+    out->timing = d->outputTiming;
     out->width = width;
     out->height = height;
     out->y = { base + static_cast<size_t>(d->cropTop) * stride + d->cropLeft,
@@ -565,9 +742,12 @@ bool VideoDecoder::next(SrcFrame* out)
     Impl* d = mImpl;
     release();
 
-    const int spins = (d->sock >= 0) ? 4 : 64;   // a live stream must not block the tick
-    for (int i = 0; i < spins && !d->frameReady; i++)
-        pump();
+    if (d->sock >= 0) {
+        pump_stream();
+    } else {
+        // File playback retains the existing pacing and one-frame semantics.
+        for (int i = 0; i < 64 && !d->frameReady; i++) pump();
+    }
     return describe_frame(out);
 }
 
