@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <unistd.h>
 
 static void usage(FILE* out)
 {
@@ -26,8 +27,15 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    if (!strcmp(argv[1], "feed") && argc <= 3)
-        return recam::cli::feed(argc - 1, argv + 1);
+    if (!strcmp(argv[1], "feed") && argc <= 3) {
+        const int rc = recam::cli::feed(argc - 1, argv + 1);
+        // feed() has closed codecs, sockets and mappings. Android's bufferpool
+        // owns detached eviction threads with no public shutdown/join API.
+        // Normal exit destroys their static mutexes while those threads run.
+        // End the process after our cleanup, without platform static teardown.
+        fflush(nullptr);
+        _exit(rc);
+    }
 
     struct Command { const char* name; int (*run)(); };
     static const Command commands[] = {
