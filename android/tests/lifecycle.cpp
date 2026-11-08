@@ -43,6 +43,7 @@ int main()
     check(recam_init(kInjectorKey, target) == 0, "retry init after failure");
     check(g_owner && g_ctrl->active && g_ctrl->hooks_installed == 1 &&
           g_ctrl->shutdown_fn && g_ctrl->owner_base, "successful init owns the hook");
+    g_ctrl->shm_fd = 42; g_ctrl->shm_size = 4096;
     ControlBlock before = *g_ctrl;
     const unsigned prior_installs = installs;
     check(recam_init(kInjectorKey, target) == 0 && installs == prior_installs,
@@ -63,7 +64,8 @@ int main()
     remove_ok = true;
     check(recam_shutdown(kInjectorKey) == 0, "retry shutdown after removal failure");
     check(!g_owner && !g_ctrl->active && !g_ctrl->hooks_installed &&
-          !g_ctrl->shutdown_fn && !g_ctrl->owner_base, "successful shutdown clears ownership");
+          !g_ctrl->shutdown_fn && !g_ctrl->owner_base && !g_ctrl->shm_fd && !g_ctrl->shm_size,
+          "successful shutdown clears ownership and ring handles");
     const unsigned prior_removals = removals;
     check(recam_shutdown(kInjectorKey) == 0 && removals == prior_removals,
           "repeated shutdown is harmless");

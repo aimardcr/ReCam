@@ -10,7 +10,10 @@ namespace recam {
 // Returns the memfd, which the payload publishes for a feeder to open.
 bool shmsource_create(int* fdOut, uint64_t* sizeOut);
 
-// nullptr if the ring was never created.
+// Only after hook substitution has been disabled and in-flight callbacks drained.
+void shmsource_destroy();
+
+// nullptr if the ring was never created or has been released.
 FrameSource* shmsource_get();
 
 // The mapped ring; the self-test plays feeder through it.

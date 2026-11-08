@@ -204,6 +204,8 @@ extern "C" EXPORT int recam_shutdown(uintptr_t key)
         g_ctrl->active      = 0;
         g_ctrl->shutdown_fn = 0;
         g_ctrl->owner_base  = 0;
+        g_ctrl->shm_fd      = 0;
+        g_ctrl->shm_size    = 0;
     }
 
     // The image stays mapped; dlclose on an injected library is never safe here.

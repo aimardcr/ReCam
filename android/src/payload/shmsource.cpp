@@ -229,6 +229,17 @@ bool shmsource_create(int* fdOut, uint64_t* sizeOut)
     return true;
 }
 
+void shmsource_destroy()
+{
+    if (g_base) {
+        munmap(g_base, g_size);
+        g_base = nullptr;
+        g_size = 0;
+    }
+    if (g_fd >= 0) { close(g_fd); g_fd = -1; }
+    LOGI("shm: retired frame ring released");
+}
+
 FrameSource* shmsource_get() { return g_base ? &g_source : nullptr; }
 
 ShmHeader* shmsource_header() { return g_base ? header() : nullptr; }

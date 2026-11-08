@@ -76,6 +76,32 @@ FrameSource* g_shm  = nullptr;   // real content, when a feeder is running
 FrameSource* g_bars = nullptr;   // fallback, so an un-fed hook is still visibly live
 const char*  g_lastSourceName = nullptr;
 
+// Sequentially consistent admission/counting ensures a callback either holds a
+// reference before retirement observes zero, or observes disabled substitution.
+uint32_t g_callbacks = 0, g_enabled = 0, g_retiring = 0, g_reclaimed = 0;
+
+void reclaim_ring_if_idle()
+{
+    if (!__atomic_load_n(&g_retiring, __ATOMIC_SEQ_CST) ||
+        __atomic_load_n(&g_callbacks, __ATOMIC_SEQ_CST) != 0) return;
+    uint32_t expected = 0;
+    if (__atomic_compare_exchange_n(&g_reclaimed, &expected, 1, false,
+                                     __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
+        shmsource_destroy();
+}
+
+struct CallbackScope {
+    bool substitute;
+    CallbackScope() {
+        __atomic_add_fetch(&g_callbacks, 1, __ATOMIC_SEQ_CST);
+        substitute = __atomic_load_n(&g_enabled, __ATOMIC_SEQ_CST) != 0;
+    }
+    ~CallbackScope() {
+        if (__atomic_sub_fetch(&g_callbacks, 1, __ATOMIC_SEQ_CST) == 0)
+            reclaim_ring_if_idle();
+    }
+};
+
 
 
 bool should_log(uint64_t n)
@@ -118,8 +144,10 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
                                           int64_t a2, int64_t a3, int64_t a4,
                                           int64_t a5, int64_t a6, int64_t a7)
 {
+    // Includes the original call: shutdown may have interrupted this very thread.
+    CallbackScope scope;
     // HAL result callback thread: a fault here takes cameraserver down.
-    if (buffer) {
+    if (scope.substitute && buffer) {
         StreamBufferView sb{};
         memcpy(&sb, buffer, sizeof(sb));
 
@@ -232,6 +260,11 @@ bool framehook_install(uintptr_t target)
         LOGW("framehook: already installed");
         return true;
     }
+    // A retired image remains mapped for old callbacks; install a fresh copy.
+    if (__atomic_load_n(&g_retiring, __ATOMIC_SEQ_CST)) {
+        LOGE("framehook: cannot reinstall a retired image");
+        return false;
+    }
     if (!target) {
         LOGE("framehook: injector supplied no target address");
         return false;
@@ -258,6 +291,7 @@ bool framehook_install(uintptr_t target)
         g_shm = g_bars = nullptr;
     }
     g_lastSourceName = nullptr;
+    __atomic_store_n(&g_enabled, 1, __ATOMIC_SEQ_CST);
     LOGI("framehook: sources = %s + %s",
          g_shm ? "shm" : "(no shm)", g_bars ? "colorbars" : "(none)");
     LOGI("framehook: hooked returnBufferCheckedLocked at %p; "
@@ -268,14 +302,26 @@ bool framehook_install(uintptr_t target)
 
 bool framehook_remove()
 {
-    if (!g_hook.installed) return true;
-
-    HookResult r = hook_remove(&g_hook);
-    if (r != HookResult::Ok) {
-        LOGE("framehook: remove failed - %s", hook_result_str(r));
-        return false;
+    // Failed initialization never exposed a callback/trampoline. Reclaim its
+    // ring synchronously and leave this image eligible for an initialization retry.
+    if (!g_hook.installed && !g_orig) {
+        shmsource_destroy();
+        return true;
     }
-    g_shm = g_bars = nullptr;
+    if (g_hook.installed) {
+        HookResult r = hook_remove(&g_hook);
+        if (r != HookResult::Ok) {
+            LOGE("framehook: remove failed - %s", hook_result_str(r));
+            return false;
+        }
+    }
+    __atomic_store_n(&g_enabled, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&g_retiring, 1, __ATOMIC_SEQ_CST);
+    // Never wait here: the injector can borrow a thread already in our callback.
+    // Its eventual scope exit reclaims the ring if other callbacks still use it.
+    reclaim_ring_if_idle();
+    // Sources are static and the image stays mapped. Keep these pointers valid
+    // for callbacks already inside fill() when shutdown removes the entry hook.
     LOGI("framehook: removed after %llu frames (%llu substituted, %llu passed through)",
          static_cast<unsigned long long>(g_frames),
          static_cast<unsigned long long>(g_substituted),
