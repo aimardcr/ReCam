@@ -181,7 +181,7 @@ bool shutdown_payload(KittyMemoryMgr& kmgr, uintptr_t ctrlAddr)
                cb.generation, cb.active, cb.hooks_installed,
                reinterpret_cast<void*>(cb.owner_base));
 
-    if (!cb.active) {
+    if (!cb.active && !cb.hooks_installed) {
         KITTY_LOGI("payload: already dormant, nothing to stand down.");
         return true;
     }
@@ -210,8 +210,9 @@ bool shutdown_payload(KittyMemoryMgr& kmgr, uintptr_t ctrlAddr)
 
     // Confirm from the control block; two live payloads must be impossible.
     if (!read_control(kmgr, ctrlAddr, &cb)) return false;
-    if (cb.active) {
-        KITTY_LOGE("payload: still reports active after shutdown.");
+    if (cb.active || cb.hooks_installed) {
+        KITTY_LOGE("payload: still reports active=%u, hooks=%u after shutdown.",
+                   cb.active, cb.hooks_installed);
         return false;
     }
 

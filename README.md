@@ -167,6 +167,36 @@ adb shell su -c '/data/local/tmp/recam stop'
 stream on `127.0.0.1:27183`, and otherwise generates a test pattern. A live sender takes
 priority over the file.
 
+### Lifecycle failures
+
+`recam inject` exits nonzero if initialization fails or the payload does not report
+an active hook. A missing hook target is an error. Failed installation attempts
+cleanup; ownership is released only if cleanup succeeds.
+
+`recam stop` exits nonzero if hook removal fails. The payload keeps its ownership
+and shutdown entry point so removal can be retried, and another copy cannot take
+over while that ownership remains. The CLI also checks that both the active flag
+and hook count are cleared before reporting a successful stop.
+
+The desktop reports failed inject/stop commands as failed jobs. An injection error
+stops the Start operation before it launches the feeder or desktop stream.
+
+### Regression checks
+
+After injecting on a test device, run `recam test` to exercise the real hook, buffer,
+and frame-ring paths inside `cameraserver` (63 checks on the verified device).
+
+Separate lifecycle tests simulate hook installation and removal failures in a
+standalone Android process, including failed cleanup and retry behavior. They do
+not inject faults into `cameraserver`. Build and run instructions are in
+[android/tests/README.md](android/tests/README.md).
+
+Desktop error-propagation tests require only Python's standard library:
+
+```bash
+python3 -m unittest discover -s desktop/tests -v
+```
+
 ## Layout
 
 ```

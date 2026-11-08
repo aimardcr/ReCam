@@ -425,6 +425,16 @@ int recam::cli::inject()
         }
     }
 
+    // Confirm the postcondition even when an older payload reports success.
+    if (rc == 0) {
+        recam::ControlBlock cb{};
+        const uintptr_t current = tgt::find_control_block(pid);
+        if (!tgt::read_control(kmgr, current, &cb) || !cb.active || !cb.hooks_installed) {
+            KITTY_LOGE("Payload init returned success without an active camera hook.");
+            rc = 1;
+        }
+    }
+
     // ---- detach -------------------------------------------------------------------
     if (!kmgr.trace.waitSyscall())
         KITTY_LOGW("waitSyscall before detach failed; detaching anyway.");

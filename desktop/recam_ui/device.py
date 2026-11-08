@@ -115,11 +115,21 @@ class Device:
         self.deploy(libs)
         return f"deployed build {want} from {libs}"
 
+    def _payload_command(self, command):
+        result = self.shell(f"{REMOTE_DIR}/recam {command}", timeout=120)
+        rc, out, err = result
+        if rc != 0:
+            detail = "\n".join(s for s in (out, err) if s)
+            if not detail:
+                detail = "See adb logcat -s ReCam for device details."
+            raise DeviceError(f"recam {command} failed (exit {rc}): {detail}")
+        return result
+
     def inject(self):
-        return self.shell(f"{REMOTE_DIR}/recam inject", timeout=120)
+        return self._payload_command("inject")
 
     def stop_payload(self):
-        return self.shell(f"{REMOTE_DIR}/recam stop", timeout=120)
+        return self._payload_command("stop")
 
     def push_source(self, local_path):
         rc, _, err = self._run(["push", local_path, REMOTE_SOURCE], timeout=600)

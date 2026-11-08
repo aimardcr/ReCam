@@ -101,14 +101,13 @@ static uintptr_t self_base()
 
 // --------------------------------------------------------------------------- hooks
 
-static void remove_all_hooks()
+static bool remove_all_hooks()
 {
-    if (g_ctrl && g_ctrl->hooks_installed == 0) {
-        LOGI("shutdown: no hooks to remove");
-        return;
-    }
-    if (recam::framehook_remove() && g_ctrl)
-        g_ctrl->hooks_installed = 0;
+    // Ask the hook itself even when the published count is zero: initialization
+    // may have failed before it could publish a successful installation.
+    if (!recam::framehook_remove()) return false;
+    if (g_ctrl) g_ctrl->hooks_installed = 0;
+    return true;
 }
 
 // --------------------------------------------------------------------------- module scan
@@ -195,7 +194,10 @@ extern "C" EXPORT int recam_shutdown(uintptr_t key)
     LOGI("=== ReCam shutdown (generation %u, base %p) ===",
          g_ctrl ? g_ctrl->generation : 0, reinterpret_cast<void*>(self_base()));
 
-    remove_all_hooks();
+    if (!remove_all_hooks()) {
+        LOGE("shutdown: hook removal failed; retaining ownership for retry");
+        return -1;
+    }
 
     g_owner = false;
     if (g_ctrl) {
@@ -216,9 +218,13 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
         LOGW("recam_init: bad key %p, ignoring", reinterpret_cast<void*>(key));
         return -1;
     }
+    if (!hookTarget) {
+        LOGE("recam_init: no hook target supplied");
+        return -1;
+    }
     if (g_owner) {
-        LOGW("recam_init: this copy is already the owner, ignoring");
-        return 0;
+        LOGW("recam_init: this copy already owns the process");
+        return g_ctrl && g_ctrl->active && g_ctrl->hooks_installed ? 0 : -1;
     }
 
     // Reusing a previous copy's block is what makes two owners impossible.
@@ -231,7 +237,7 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
     }
 
     // The injector should already have stood the previous owner down.
-    if (c->active) {
+    if (c->active || c->hooks_installed) {
         LOGE("recam_init: generation %u is still ACTIVE (shutdown_fn %p). "
              "Refusing to take over - restart cameraserver.",
              c->generation, reinterpret_cast<void*>(c->shutdown_fn));
@@ -269,18 +275,16 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
         LOGW("shm: no frame ring; only the built-in colour bars are available");
     }
 
-    if (!hookTarget) {
-        LOGW("recam_init: no hook target supplied; staying passive");
-        return 0;
-    }
-
     LOGI("hook target: %p", reinterpret_cast<void*>(hookTarget));
-    if (recam::framehook_install(hookTarget)) {
-        c->hooks_installed = 1;
-    } else {
-        // Not a failed init: the payload stays loaded and dormant.
-        LOGE("recam_init: hook install failed; payload is loaded but inert");
+    if (!recam::framehook_install(hookTarget)) {
+        LOGE("recam_init: hook install failed");
+        // Clear ownership only after cleanup succeeds. A cleanup failure must
+        // keep the shutdown entry point available and block another owner.
+        if (recam_shutdown(key) != 0)
+            LOGE("recam_init: cleanup failed; ownership retained for shutdown retry");
+        return -1;
     }
+    c->hooks_installed = 1;
 
     LOGI("recam_init: done");
     return 0;
