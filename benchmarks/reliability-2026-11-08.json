@@ -1,0 +1,2454 @@
+{
+  "date": "2026-11-08",
+  "final_build": "24c394dd11ca7c8e",
+  "device": {
+    "serial": "AUM7QWBQCEPZGQJB",
+    "model": "POCO 2409FPCC4G",
+    "android": 16,
+    "api": 36,
+    "abi": "arm64-v8a"
+  },
+  "idle_initial": {
+    "initial": {
+      "now_ns": 173043083438083,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 246,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    },
+    "cycles": [
+      {
+        "cycle": 0,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 1,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 2,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 3,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 4,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 5,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 6,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 7,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 8,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 9,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 10,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 11,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 12,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 13,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 14,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 15,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 16,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 17,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 18,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 19,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 20,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 21,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 22,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 23,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 24,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 25,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 26,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 27,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 28,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      },
+      {
+        "cycle": 29,
+        "base": "0x74f23e9000",
+        "rss_kib": 106352,
+        "vmas": 4156,
+        "reused": false
+      }
+    ],
+    "build": "deployed build 8873ff5b8602358f from /Users/ak4ne/Projects/ReCam/desktop/recam_ui/payload/arm64-v8a",
+    "final": {
+      "now_ns": 173098901447624,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 276,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    }
+  },
+  "idle_initial_analysis": {
+    "analysis_passed": true,
+    "collection_error": "Harness searched stdout for reuse logs; native logging is in logcat. Original report retained.",
+    "reuse_log_lines": [
+      "11-08 20:33:43.242 19162 19162 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:45.132 19193 19193 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:46.962 19215 19215 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:48.757 19236 19236 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:50.582 19277 19277 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:52.442 19300 19300 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:54.262 19322 19322 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:56.070 19361 19361 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:57.847 19382 19382 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:33:59.679 19408 19408 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:01.540 19436 19436 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:03.314 19459 19459 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:05.125 19488 19488 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:06.933 19512 19512 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:08.829 19537 19537 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:10.636 19563 19563 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:12.557 19586 19586 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:14.503 19608 19608 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:16.267 19633 19633 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:18.000 19655 19655 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:19.818 19681 19681 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:21.605 19703 19703 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:23.405 19735 19735 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:25.096 19774 19774 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:26.906 19819 19819 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:28.743 19841 19841 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:30.535 19873 19873 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:32.301 19902 19902 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline).",
+      "11-08 20:34:34.108 19925 19925 I KittyMemoryEx: Resident payload 0x74f23e9000 reuse succeeded (no new image/trampoline)."
+    ],
+    "cycles": 30,
+    "resident_base": "0x74f23e9000",
+    "rss_kib": 106352,
+    "vmas": 4156,
+    "original": "idle.json"
+  },
+  "idle_final": {
+    "initial": {
+      "now_ns": 173356635095255,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 290,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    },
+    "cycles": [
+      {
+        "cycle": 0,
+        "base": "0x74f14ca000",
+        "rss_kib": 105956,
+        "vmas": 4277
+      },
+      {
+        "cycle": 1,
+        "base": "0x74f14ca000",
+        "rss_kib": 105956,
+        "vmas": 4277
+      },
+      {
+        "cycle": 2,
+        "base": "0x74f14ca000",
+        "rss_kib": 106084,
+        "vmas": 4277
+      },
+      {
+        "cycle": 3,
+        "base": "0x74f14ca000",
+        "rss_kib": 106084,
+        "vmas": 4277
+      },
+      {
+        "cycle": 4,
+        "base": "0x74f14ca000",
+        "rss_kib": 106084,
+        "vmas": 4277
+      },
+      {
+        "cycle": 5,
+        "base": "0x74f14ca000",
+        "rss_kib": 106084,
+        "vmas": 4277
+      },
+      {
+        "cycle": 6,
+        "base": "0x74f14ca000",
+        "rss_kib": 106084,
+        "vmas": 4277
+      },
+      {
+        "cycle": 7,
+        "base": "0x74f14ca000",
+        "rss_kib": 106084,
+        "vmas": 4277
+      },
+      {
+        "cycle": 8,
+        "base": "0x74f14ca000",
+        "rss_kib": 106084,
+        "vmas": 4277
+      },
+      {
+        "cycle": 9,
+        "base": "0x74f14ca000",
+        "rss_kib": 106212,
+        "vmas": 4277
+      }
+    ],
+    "build": "deployed build 90e5b2c55f60f228 from /Users/ak4ne/Projects/ReCam/desktop/recam_ui/payload/arm64-v8a",
+    "passed": true,
+    "final": {
+      "now_ns": 173382935968180,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 300,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    }
+  },
+  "live_switching": {
+    "initial": {
+      "now_ns": 173133097239011,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 276,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    },
+    "cycles": [
+      {
+        "cycle": 1,
+        "mode": "disconnect",
+        "size": "1280x720",
+        "file_fallback": false,
+        "feeder_pid": 20252,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 49,
+        "receive_to_copy_age_ms": {
+          "count": 65,
+          "p50": 36.510692,
+          "p95": 61.548615,
+          "max": 121.362692
+        },
+        "cameraserver_rss_kib": 84152,
+        "elapsed_seconds": 7.100153249994037
+      },
+      {
+        "cycle": 2,
+        "mode": "stop_live",
+        "size": "1920x1080",
+        "file_fallback": false,
+        "feeder_pid": 20323,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 11,
+        "receive_to_copy_age_ms": {
+          "count": 19,
+          "p50": 62.862154,
+          "p95": 241.568231,
+          "max": 241.568231
+        },
+        "cameraserver_rss_kib": 90828,
+        "elapsed_seconds": 11.513662957993802
+      },
+      {
+        "cycle": 3,
+        "mode": "pause_resume",
+        "size": "1280x720",
+        "file_fallback": false,
+        "feeder_pid": 20379,
+        "short_pause_publications": 0,
+        "fallback_publications": 31,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 39,
+        "receive_to_copy_age_ms": {
+          "count": 115,
+          "p50": 305.929846,
+          "p95": 1847.451,
+          "max": 2013.222461
+        },
+        "cameraserver_rss_kib": 101688,
+        "elapsed_seconds": 23.01791008299915
+      },
+      {
+        "cycle": 4,
+        "mode": "reconnect",
+        "size": "1920x1080",
+        "file_fallback": false,
+        "feeder_pid": 20469,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 83,
+        "receive_to_copy_age_ms": {
+          "count": 125,
+          "p50": 66.980616,
+          "p95": 188.073,
+          "max": 409.347385
+        },
+        "cameraserver_rss_kib": 105612,
+        "elapsed_seconds": 32.29628937499365
+      },
+      {
+        "cycle": 5,
+        "mode": "disconnect",
+        "size": "1280x720",
+        "file_fallback": true,
+        "feeder_pid": 20577,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 45,
+        "receive_to_copy_age_ms": {
+          "count": 66,
+          "p50": 66.009924,
+          "p95": 199.490769,
+          "max": 264.242769
+        },
+        "cameraserver_rss_kib": 105668,
+        "elapsed_seconds": 39.14837370799796
+      },
+      {
+        "cycle": 6,
+        "mode": "stop_live",
+        "size": "1920x1080",
+        "file_fallback": true,
+        "feeder_pid": 20673,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 14,
+        "receive_to_copy_age_ms": {
+          "count": 20,
+          "p50": 70.167,
+          "p95": 215.280308,
+          "max": 228.36
+        },
+        "cameraserver_rss_kib": 105848,
+        "elapsed_seconds": 44.072017207996396
+      },
+      {
+        "cycle": 7,
+        "mode": "pause_resume",
+        "size": "1280x720",
+        "file_fallback": true,
+        "feeder_pid": 20756,
+        "short_pause_publications": 0,
+        "fallback_publications": 16,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 36,
+        "receive_to_copy_age_ms": {
+          "count": 118,
+          "p50": 208.761,
+          "p95": 1892.828384,
+          "max": 2040.465538
+        },
+        "cameraserver_rss_kib": 105948,
+        "elapsed_seconds": 56.6644518749963
+      },
+      {
+        "cycle": 8,
+        "mode": "reconnect",
+        "size": "1920x1080",
+        "file_fallback": true,
+        "feeder_pid": 20855,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 88,
+        "receive_to_copy_age_ms": {
+          "count": 130,
+          "p50": 63.952308,
+          "p95": 160.117616,
+          "max": 240.663154
+        },
+        "cameraserver_rss_kib": 105904,
+        "elapsed_seconds": 66.55736458299361
+      },
+      {
+        "cycle": 9,
+        "mode": "disconnect",
+        "size": "1280x720",
+        "file_fallback": false,
+        "feeder_pid": 20979,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 38,
+        "receive_to_copy_age_ms": {
+          "count": 58,
+          "p50": 65.144847,
+          "p95": 330.398847,
+          "max": 384.072693
+        },
+        "cameraserver_rss_kib": 106020,
+        "elapsed_seconds": 73.60649466599716
+      },
+      {
+        "cycle": 10,
+        "mode": "stop_live",
+        "size": "1920x1080",
+        "file_fallback": false,
+        "feeder_pid": 21046,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 9,
+        "receive_to_copy_age_ms": {
+          "count": 18,
+          "p50": 99.799154,
+          "p95": 237.103692,
+          "max": 237.103692
+        },
+        "cameraserver_rss_kib": 106008,
+        "elapsed_seconds": 78.75557645799563
+      },
+      {
+        "cycle": 11,
+        "mode": "pause_resume",
+        "size": "1280x720",
+        "file_fallback": false,
+        "feeder_pid": 21108,
+        "short_pause_publications": 0,
+        "fallback_publications": 32,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 39,
+        "receive_to_copy_age_ms": {
+          "count": 114,
+          "p50": 198.347385,
+          "p95": 1838.009924,
+          "max": 2031.481
+        },
+        "cameraserver_rss_kib": 105928,
+        "elapsed_seconds": 90.68748974999471
+      },
+      {
+        "cycle": 12,
+        "mode": "reconnect",
+        "size": "1920x1080",
+        "file_fallback": false,
+        "feeder_pid": 21208,
+        "feeder_exit": 0,
+        "crashes": [],
+        "live_frames_consumed": 87,
+        "receive_to_copy_age_ms": {
+          "count": 128,
+          "p50": 61.908,
+          "p95": 142.556,
+          "max": 293.046539
+        },
+        "cameraserver_rss_kib": 105836,
+        "elapsed_seconds": 100.1238959159964
+      }
+    ],
+    "passed": true,
+    "transport": "flv",
+    "requested_minutes": 0,
+    "build": "deployed build c657ea82d4340481 from /Users/ak4ne/Projects/ReCam/desktop/recam_ui/payload/arm64-v8a",
+    "final": {
+      "now_ns": 173233899695017,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 288,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    },
+    "elapsed_seconds": 100.80487441599689
+  },
+  "feeder_restart": {
+    "initial": {
+      "now_ns": 173278131409097,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 288,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    },
+    "cycles": [
+      {
+        "cycle": 0,
+        "feeder": 21484,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 47,
+          "consumed": 51,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 47,
+              "age_ms": 26
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 1,
+        "feeder": 21516,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 111,
+          "consumed": 140,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 111,
+              "age_ms": 3
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 2,
+        "feeder": 21558,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 186,
+          "consumed": 250,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 186,
+              "age_ms": 18
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 3,
+        "feeder": 21592,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 250,
+          "consumed": 351,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 250,
+              "age_ms": 20
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 4,
+        "feeder": 21626,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 318,
+          "consumed": 448,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 318,
+              "age_ms": 15
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 5,
+        "feeder": 21676,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 36,
+          "consumed": 40,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 36,
+              "age_ms": 17
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 6,
+        "feeder": 21803,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 88,
+          "consumed": 124,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 88,
+              "age_ms": 19
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 7,
+        "feeder": 21851,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 151,
+          "consumed": 218,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 151,
+              "age_ms": 32
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 8,
+        "feeder": 21890,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 235,
+          "consumed": 338,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 235,
+              "age_ms": 19
+            }
+          ]
+        }
+      },
+      {
+        "cycle": 9,
+        "feeder": 21932,
+        "ring_before_kill": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 290,
+          "consumed": 436,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 290,
+              "age_ms": 27
+            }
+          ]
+        }
+      }
+    ],
+    "build": "deployed build b4fb204f7705cf4f from /Users/ak4ne/Projects/ReCam/desktop/recam_ui/payload/arm64-v8a",
+    "second_producer_exit": 1,
+    "active_reinject": {
+      "before": 289,
+      "after": 290
+    },
+    "passed": true,
+    "final": {
+      "now_ns": 173312878861176,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 290,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    }
+  },
+  "compositor": {
+    "720p": {
+      "initial": {
+        "now_ns": 173383600203872,
+        "root": true,
+        "cameraserver": {
+          "running": true,
+          "pid": 22358
+        },
+        "feeder": {
+          "running": false,
+          "pid": 0
+        },
+        "payload": {
+          "injected": true,
+          "control_version": 2,
+          "speaks_version": 2,
+          "active": false,
+          "generation": 300,
+          "hooks_installed": 0,
+          "owner_pid": 22358,
+          "owner_base": "0x0",
+          "control_addr": "0x77acaa4000"
+        },
+        "ring": {
+          "present": false
+        }
+      },
+      "size": "1280x720",
+      "requested_fps": 30,
+      "samples": [
+        {
+          "screenshot": "screenshot-000.png",
+          "request_ns": 50224730007041,
+          "reply_ns": 50225451291000,
+          "sampled_upper_ns": 50225139768000,
+          "decoded": "RC00000061",
+          "frame": 97,
+          "generated_ns": 50224969880458,
+          "lower_ms": 0.0,
+          "upper_ms": 169.887542,
+          "screenshot_round_trip_ms": 721.283959
+        },
+        {
+          "screenshot": "screenshot-001.png",
+          "request_ns": 50225734422208,
+          "reply_ns": 50226352195333,
+          "sampled_upper_ns": 50226046976291,
+          "decoded": "RC0000007C",
+          "frame": 124,
+          "generated_ns": 50225869908666,
+          "lower_ms": 0.0,
+          "upper_ms": 177.067625,
+          "screenshot_round_trip_ms": 617.773125
+        },
+        {
+          "screenshot": "screenshot-002.png",
+          "request_ns": 50226644505583,
+          "reply_ns": 50227251811166,
+          "sampled_upper_ns": 50226950998458,
+          "decoded": "RC00000097",
+          "frame": 151,
+          "generated_ns": 50226769837500,
+          "lower_ms": 0.0,
+          "upper_ms": 181.160958,
+          "screenshot_round_trip_ms": 607.305583
+        },
+        {
+          "screenshot": "screenshot-003.png",
+          "request_ns": 50227536523416,
+          "reply_ns": 50228209492083,
+          "sampled_upper_ns": 50227917888125,
+          "decoded": "RC000000B4",
+          "frame": 180,
+          "generated_ns": 50227739510583,
+          "lower_ms": 0.0,
+          "upper_ms": 178.377542,
+          "screenshot_round_trip_ms": 672.968667
+        },
+        {
+          "screenshot": "screenshot-004.png",
+          "request_ns": 50228500592583,
+          "reply_ns": 50229110885125,
+          "sampled_upper_ns": 50228806549125,
+          "decoded": "RC000000CF",
+          "frame": 207,
+          "generated_ns": 50228636529875,
+          "lower_ms": 0.0,
+          "upper_ms": 170.01925,
+          "screenshot_round_trip_ms": 610.292542
+        },
+        {
+          "screenshot": "screenshot-005.png",
+          "request_ns": 50229399890250,
+          "reply_ns": 50229995679541,
+          "sampled_upper_ns": 50229700628458,
+          "decoded": "RC000000EA",
+          "frame": 234,
+          "generated_ns": 50229539966958,
+          "lower_ms": 0.0,
+          "upper_ms": 160.6615,
+          "screenshot_round_trip_ms": 595.789291
+        },
+        {
+          "screenshot": "screenshot-006.png",
+          "request_ns": 50230292124750,
+          "reply_ns": 50231029243541,
+          "sampled_upper_ns": 50230747505041,
+          "decoded": "RC00000108",
+          "frame": 264,
+          "generated_ns": 50230538513083,
+          "lower_ms": 0.0,
+          "upper_ms": 208.991958,
+          "screenshot_round_trip_ms": 737.118791
+        },
+        {
+          "screenshot": "screenshot-007.png",
+          "request_ns": 50231317041875,
+          "reply_ns": 50231970485916,
+          "sampled_upper_ns": 50231678206333,
+          "decoded": "RC00000124",
+          "frame": 292,
+          "generated_ns": 50231466352166,
+          "lower_ms": 0.0,
+          "upper_ms": 211.854167,
+          "screenshot_round_trip_ms": 653.444041
+        },
+        {
+          "screenshot": "screenshot-008.png",
+          "request_ns": 50232261521583,
+          "reply_ns": 50232898609000,
+          "sampled_upper_ns": 50232610332083,
+          "decoded": "RC0000013F",
+          "frame": 319,
+          "generated_ns": 50232372744750,
+          "lower_ms": 0.0,
+          "upper_ms": 237.587333,
+          "screenshot_round_trip_ms": 637.087417
+        },
+        {
+          "screenshot": "screenshot-009.png",
+          "request_ns": 50233182174250,
+          "reply_ns": 50233750403666,
+          "sampled_upper_ns": 50233465814875,
+          "decoded": "RC0000015A",
+          "frame": 346,
+          "generated_ns": 50233273755166,
+          "lower_ms": 0.0,
+          "upper_ms": 192.059709,
+          "screenshot_round_trip_ms": 568.229416
+        },
+        {
+          "screenshot": "screenshot-010.png",
+          "request_ns": 50234042705375,
+          "reply_ns": 50234656284541,
+          "sampled_upper_ns": 50234346793541,
+          "decoded": "RC00000176",
+          "frame": 374,
+          "generated_ns": 50234207126916,
+          "lower_ms": 0.0,
+          "upper_ms": 139.666625,
+          "screenshot_round_trip_ms": 613.579166
+        },
+        {
+          "screenshot": "screenshot-011.png",
+          "request_ns": 50234943107208,
+          "reply_ns": 50235509303166,
+          "sampled_upper_ns": 50235227348708,
+          "decoded": "RC0000018F",
+          "frame": 399,
+          "generated_ns": 50235035541791,
+          "lower_ms": 0.0,
+          "upper_ms": 191.806917,
+          "screenshot_round_trip_ms": 566.195958
+        },
+        {
+          "screenshot": "screenshot-012.png",
+          "request_ns": 50235830155041,
+          "reply_ns": 50236473731625,
+          "sampled_upper_ns": 50236149197666,
+          "decoded": "RC000001AA",
+          "frame": 426,
+          "generated_ns": 50235933889791,
+          "lower_ms": 0.0,
+          "upper_ms": 215.307875,
+          "screenshot_round_trip_ms": 643.576584
+        },
+        {
+          "screenshot": "screenshot-013.png",
+          "request_ns": 50236761580791,
+          "reply_ns": 50237465663500,
+          "sampled_upper_ns": 50237133417000,
+          "decoded": "RC000001C9",
+          "frame": 457,
+          "generated_ns": 50236971678083,
+          "lower_ms": 0.0,
+          "upper_ms": 161.738917,
+          "screenshot_round_trip_ms": 704.082709
+        },
+        {
+          "screenshot": "screenshot-014.png",
+          "request_ns": 50237768927625,
+          "reply_ns": 50238808914208,
+          "sampled_upper_ns": 50238176118916,
+          "decoded": "RC000001E6",
+          "frame": 486,
+          "generated_ns": 50237936514416,
+          "lower_ms": 0.0,
+          "upper_ms": 239.6045,
+          "screenshot_round_trip_ms": 1039.986583
+        },
+        {
+          "screenshot": "screenshot-015.png",
+          "request_ns": 50239107999708,
+          "reply_ns": 50239748034708,
+          "sampled_upper_ns": 50239449640625,
+          "decoded": "RC0000020E",
+          "frame": 526,
+          "generated_ns": 50239265407458,
+          "lower_ms": 0.0,
+          "upper_ms": 184.233167,
+          "screenshot_round_trip_ms": 640.035
+        },
+        {
+          "screenshot": "screenshot-016.png",
+          "request_ns": 50240032201083,
+          "reply_ns": 50240724916541,
+          "sampled_upper_ns": 50240435580833,
+          "decoded": "RC0000022A",
+          "frame": 554,
+          "generated_ns": 50240204965833,
+          "lower_ms": 0.0,
+          "upper_ms": 230.615,
+          "screenshot_round_trip_ms": 692.715458
+        },
+        {
+          "screenshot": "screenshot-017.png",
+          "request_ns": 50241019863041,
+          "reply_ns": 50241951885083,
+          "sampled_upper_ns": 50241427403208,
+          "decoded": "RC00000247",
+          "frame": 583,
+          "generated_ns": 50241172511333,
+          "lower_ms": 0.0,
+          "upper_ms": 254.891875,
+          "screenshot_round_trip_ms": 932.022042
+        },
+        {
+          "screenshot": "screenshot-018.png",
+          "request_ns": 50242232493791,
+          "reply_ns": 50242875623500,
+          "sampled_upper_ns": 50242568824916,
+          "decoded": "RC0000026C",
+          "frame": 620,
+          "generated_ns": 50242405291083,
+          "lower_ms": 0.0,
+          "upper_ms": 163.533833,
+          "screenshot_round_trip_ms": 643.129709
+        },
+        {
+          "screenshot": "screenshot-019.png",
+          "request_ns": 50243161617791,
+          "reply_ns": 50243862169083,
+          "sampled_upper_ns": 50243568106583,
+          "decoded": "RC00000289",
+          "frame": 649,
+          "generated_ns": 50243372804500,
+          "lower_ms": 0.0,
+          "upper_ms": 195.302083,
+          "screenshot_round_trip_ms": 700.551292
+        },
+        {
+          "screenshot": "screenshot-020.png",
+          "request_ns": 50244203189666,
+          "reply_ns": 50244899585166,
+          "sampled_upper_ns": 50244609066500,
+          "decoded": "RC000002AA",
+          "frame": 682,
+          "generated_ns": 50244470498208,
+          "lower_ms": 0.0,
+          "upper_ms": 138.568292,
+          "screenshot_round_trip_ms": 696.3955
+        },
+        {
+          "screenshot": "screenshot-021.png",
+          "request_ns": 50245189580250,
+          "reply_ns": 50245868827833,
+          "sampled_upper_ns": 50245567318000,
+          "decoded": "RC000002C7",
+          "frame": 711,
+          "generated_ns": 50245436485625,
+          "lower_ms": 0.0,
+          "upper_ms": 130.832375,
+          "screenshot_round_trip_ms": 679.247583
+        },
+        {
+          "screenshot": "screenshot-022.png",
+          "request_ns": 50246158191041,
+          "reply_ns": 50246764922625,
+          "sampled_upper_ns": 50246477104166,
+          "decoded": "RC000002DF",
+          "frame": 735,
+          "generated_ns": 50246240411416,
+          "lower_ms": 0.0,
+          "upper_ms": 236.69275,
+          "screenshot_round_trip_ms": 606.731584
+        },
+        {
+          "screenshot": "screenshot-023.png",
+          "request_ns": 50247067732166,
+          "reply_ns": 50247922423916,
+          "sampled_upper_ns": 50247631228041,
+          "decoded": "RC00000301",
+          "frame": 769,
+          "generated_ns": 50247372268708,
+          "lower_ms": 0.0,
+          "upper_ms": 258.959333,
+          "screenshot_round_trip_ms": 854.69175
+        },
+        {
+          "screenshot": "screenshot-024.png",
+          "request_ns": 50248221879666,
+          "reply_ns": 50248817251750,
+          "sampled_upper_ns": 50248525173208,
+          "decoded": "RC0000031F",
+          "frame": 799,
+          "generated_ns": 50248369787250,
+          "lower_ms": 0.0,
+          "upper_ms": 155.385958,
+          "screenshot_round_trip_ms": 595.372084
+        },
+        {
+          "screenshot": "screenshot-025.png",
+          "request_ns": 50249111149791,
+          "reply_ns": 50250112916625,
+          "sampled_upper_ns": 50249496339416,
+          "decoded": "RC00000339",
+          "frame": 825,
+          "generated_ns": 50249236640166,
+          "lower_ms": 0.0,
+          "upper_ms": 259.69925,
+          "screenshot_round_trip_ms": 1001.766834
+        },
+        {
+          "screenshot": "screenshot-026.png",
+          "request_ns": 50250401902791,
+          "reply_ns": 50251040198625,
+          "sampled_upper_ns": 50250742011750,
+          "decoded": "RC00000361",
+          "frame": 865,
+          "generated_ns": 50250569945041,
+          "lower_ms": 0.0,
+          "upper_ms": 172.066709,
+          "screenshot_round_trip_ms": 638.295834
+        },
+        {
+          "screenshot": "screenshot-027.png",
+          "request_ns": 50251337205000,
+          "reply_ns": 50252114325500,
+          "sampled_upper_ns": 50251818590458,
+          "decoded": "RC00000380",
+          "frame": 896,
+          "generated_ns": 50251606104541,
+          "lower_ms": 0.0,
+          "upper_ms": 212.485917,
+          "screenshot_round_trip_ms": 777.1205
+        },
+        {
+          "screenshot": "screenshot-028.png",
+          "request_ns": 50252400423791,
+          "reply_ns": 50253022056875,
+          "sampled_upper_ns": 50252717748416,
+          "decoded": "RC0000039C",
+          "frame": 924,
+          "generated_ns": 50252533759291,
+          "lower_ms": 0.0,
+          "upper_ms": 183.989125,
+          "screenshot_round_trip_ms": 621.633084
+        },
+        {
+          "screenshot": "screenshot-029.png",
+          "request_ns": 50253305638625,
+          "reply_ns": 50253982145625,
+          "sampled_upper_ns": 50253686054875,
+          "decoded": "RC000003B9",
+          "frame": 953,
+          "generated_ns": 50253503469833,
+          "lower_ms": 0.0,
+          "upper_ms": 182.585042,
+          "screenshot_round_trip_ms": 676.507
+        }
+      ],
+      "endpoint": "synthetic frame generation to compositor screenshot sampling",
+      "excluded": [
+        "physical source capture",
+        "physical display scanout and response"
+      ],
+      "sampling_bound": "request start to first PNG signature received",
+      "caveats": [
+        "snapshot frame age is not first-presentation latency",
+        "screencap perturbs the device; header arrival is only an upper bound",
+        "a synthetic QR scene is not representative camera content"
+      ],
+      "build": "binaries already current (90e5b2c55f60f228)",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        "rgb24",
+        "-video_size",
+        "1280x720",
+        "-framerate",
+        "30",
+        "-i",
+        "pipe:0",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-bf",
+        "0",
+        "-g",
+        "15",
+        "-r",
+        "30",
+        "-vf",
+        "scale=-2:'min(1080,ih)'",
+        "-pix_fmt",
+        "yuv420p",
+        "-flvflags",
+        "no_duration_filesize",
+        "-flush_packets",
+        "1",
+        "-f",
+        "flv",
+        "tcp://127.0.0.1:52438"
+      ],
+      "source_frames": 976,
+      "source_fps": 29.977025535758248,
+      "lower_ms": {
+        "count": 30,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0
+      },
+      "upper_ms": {
+        "count": 30,
+        "p50": 183.989125,
+        "p95": 258.959333,
+        "max": 259.69925
+      },
+      "screenshot_round_trip_ms": {
+        "count": 30,
+        "p50": 643.576584,
+        "p95": 1001.766834,
+        "max": 1039.986583
+      },
+      "unique_frames": 30,
+      "measurement_end": {
+        "now_ns": 173418833371643,
+        "root": true,
+        "cameraserver": {
+          "running": true,
+          "pid": 22358
+        },
+        "feeder": {
+          "running": true,
+          "pid": 22441
+        },
+        "payload": {
+          "injected": true,
+          "control_version": 2,
+          "speaks_version": 2,
+          "active": true,
+          "generation": 301,
+          "hooks_installed": 1,
+          "owner_pid": 22358,
+          "owner_base": "0x74f14ca000",
+          "control_addr": "0x77acaa4000"
+        },
+        "ring": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 963,
+          "consumed": 1051,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 963,
+              "age_ms": 22
+            }
+          ]
+        }
+      },
+      "passed": true,
+      "final": {
+        "now_ns": 173425558513721,
+        "root": true,
+        "cameraserver": {
+          "running": true,
+          "pid": 22358
+        },
+        "feeder": {
+          "running": false,
+          "pid": 0
+        },
+        "payload": {
+          "injected": true,
+          "control_version": 2,
+          "speaks_version": 2,
+          "active": false,
+          "generation": 301,
+          "hooks_installed": 0,
+          "owner_pid": 22358,
+          "owner_base": "0x0",
+          "control_addr": "0x77acaa4000"
+        },
+        "ring": {
+          "present": false
+        }
+      }
+    },
+    "1080p": {
+      "initial": {
+        "now_ns": 173426225352798,
+        "root": true,
+        "cameraserver": {
+          "running": true,
+          "pid": 22358
+        },
+        "feeder": {
+          "running": false,
+          "pid": 0
+        },
+        "payload": {
+          "injected": true,
+          "control_version": 2,
+          "speaks_version": 2,
+          "active": false,
+          "generation": 301,
+          "hooks_installed": 0,
+          "owner_pid": 22358,
+          "owner_base": "0x0",
+          "control_addr": "0x77acaa4000"
+        },
+        "ring": {
+          "present": false
+        }
+      },
+      "size": "1920x1080",
+      "requested_fps": 30,
+      "samples": [
+        {
+          "screenshot": "screenshot-000.png",
+          "request_ns": 50267095282500,
+          "reply_ns": 50267929510291,
+          "sampled_upper_ns": 50267642614958,
+          "decoded": "RC00000062",
+          "frame": 98,
+          "generated_ns": 50267377605458,
+          "lower_ms": 0.0,
+          "upper_ms": 265.0095,
+          "screenshot_round_trip_ms": 834.227791
+        },
+        {
+          "screenshot": "screenshot-001.png",
+          "request_ns": 50268208113833,
+          "reply_ns": 50269058669166,
+          "sampled_upper_ns": 50268742552750,
+          "decoded": "RC00000085",
+          "frame": 133,
+          "generated_ns": 50268540189250,
+          "lower_ms": 0.0,
+          "upper_ms": 202.3635,
+          "screenshot_round_trip_ms": 850.555333
+        },
+        {
+          "screenshot": "screenshot-002.png",
+          "request_ns": 50269338256416,
+          "reply_ns": 50269928860750,
+          "sampled_upper_ns": 50269631672958,
+          "decoded": "RC000000A1",
+          "frame": 161,
+          "generated_ns": 50269481577916,
+          "lower_ms": 0.0,
+          "upper_ms": 150.095042,
+          "screenshot_round_trip_ms": 590.604334
+        },
+        {
+          "screenshot": "screenshot-003.png",
+          "request_ns": 50270198463500,
+          "reply_ns": 50270804186583,
+          "sampled_upper_ns": 50270516991375,
+          "decoded": "RC000000BC",
+          "frame": 188,
+          "generated_ns": 50270377339416,
+          "lower_ms": 0.0,
+          "upper_ms": 139.651959,
+          "screenshot_round_trip_ms": 605.723083
+        },
+        {
+          "screenshot": "screenshot-004.png",
+          "request_ns": 50271084030250,
+          "reply_ns": 50271701968125,
+          "sampled_upper_ns": 50271398434250,
+          "decoded": "RC000000D5",
+          "frame": 213,
+          "generated_ns": 50271210982333,
+          "lower_ms": 0.0,
+          "upper_ms": 187.451917,
+          "screenshot_round_trip_ms": 617.937875
+        },
+        {
+          "screenshot": "screenshot-005.png",
+          "request_ns": 50271968214041,
+          "reply_ns": 50272627450791,
+          "sampled_upper_ns": 50272328495458,
+          "decoded": "RC000000F0",
+          "frame": 240,
+          "generated_ns": 50272110973000,
+          "lower_ms": 0.0,
+          "upper_ms": 217.522458,
+          "screenshot_round_trip_ms": 659.23675
+        },
+        {
+          "screenshot": "screenshot-006.png",
+          "request_ns": 50272897577000,
+          "reply_ns": 50273565846750,
+          "sampled_upper_ns": 50273288127083,
+          "decoded": "RC0000010D",
+          "frame": 269,
+          "generated_ns": 50273076812166,
+          "lower_ms": 0.0,
+          "upper_ms": 211.314917,
+          "screenshot_round_trip_ms": 668.26975
+        },
+        {
+          "screenshot": "screenshot-007.png",
+          "request_ns": 50273828667166,
+          "reply_ns": 50274419259583,
+          "sampled_upper_ns": 50274119306041,
+          "decoded": "RC00000127",
+          "frame": 295,
+          "generated_ns": 50273939962208,
+          "lower_ms": 0.0,
+          "upper_ms": 179.343833,
+          "screenshot_round_trip_ms": 590.592417
+        },
+        {
+          "screenshot": "screenshot-008.png",
+          "request_ns": 50274689716291,
+          "reply_ns": 50275301775291,
+          "sampled_upper_ns": 50275007724083,
+          "decoded": "RC00000142",
+          "frame": 322,
+          "generated_ns": 50274844305541,
+          "lower_ms": 0.0,
+          "upper_ms": 163.418542,
+          "screenshot_round_trip_ms": 612.059
+        },
+        {
+          "screenshot": "screenshot-009.png",
+          "request_ns": 50275571885916,
+          "reply_ns": 50276140615458,
+          "sampled_upper_ns": 50275851716208,
+          "decoded": "RC0000015B",
+          "frame": 347,
+          "generated_ns": 50275677634666,
+          "lower_ms": 0.0,
+          "upper_ms": 174.081542,
+          "screenshot_round_trip_ms": 568.729542
+        },
+        {
+          "screenshot": "screenshot-010.png",
+          "request_ns": 50276410432333,
+          "reply_ns": 50277063619291,
+          "sampled_upper_ns": 50276759280166,
+          "decoded": "RC00000174",
+          "frame": 372,
+          "generated_ns": 50276507759166,
+          "lower_ms": 0.0,
+          "upper_ms": 251.521,
+          "screenshot_round_trip_ms": 653.186958
+        },
+        {
+          "screenshot": "screenshot-011.png",
+          "request_ns": 50277331628041,
+          "reply_ns": 50278032524333,
+          "sampled_upper_ns": 50277740901958,
+          "decoded": "RC00000191",
+          "frame": 401,
+          "generated_ns": 50277477641958,
+          "lower_ms": 0.0,
+          "upper_ms": 263.26,
+          "screenshot_round_trip_ms": 700.896292
+        },
+        {
+          "screenshot": "screenshot-012.png",
+          "request_ns": 50278297712916,
+          "reply_ns": 50278911063416,
+          "sampled_upper_ns": 50278610037708,
+          "decoded": "RC000001AE",
+          "frame": 430,
+          "generated_ns": 50278444328166,
+          "lower_ms": 0.0,
+          "upper_ms": 165.709542,
+          "screenshot_round_trip_ms": 613.3505
+        },
+        {
+          "screenshot": "screenshot-013.png",
+          "request_ns": 50279176270583,
+          "reply_ns": 50279950412333,
+          "sampled_upper_ns": 50279574682166,
+          "decoded": "RC000001C9",
+          "frame": 457,
+          "generated_ns": 50279344304833,
+          "lower_ms": 0.0,
+          "upper_ms": 230.377333,
+          "screenshot_round_trip_ms": 774.14175
+        },
+        {
+          "screenshot": "screenshot-014.png",
+          "request_ns": 50280223299000,
+          "reply_ns": 50281016113791,
+          "sampled_upper_ns": 50280720010375,
+          "decoded": "RC000001EC",
+          "frame": 492,
+          "generated_ns": 50280510973500,
+          "lower_ms": 0.0,
+          "upper_ms": 209.036875,
+          "screenshot_round_trip_ms": 792.814791
+        },
+        {
+          "screenshot": "screenshot-015.png",
+          "request_ns": 50281288611541,
+          "reply_ns": 50281934639583,
+          "sampled_upper_ns": 50281657374458,
+          "decoded": "RC00000209",
+          "frame": 521,
+          "generated_ns": 50281477634250,
+          "lower_ms": 0.0,
+          "upper_ms": 179.740208,
+          "screenshot_round_trip_ms": 646.028042
+        },
+        {
+          "screenshot": "screenshot-016.png",
+          "request_ns": 50282204635041,
+          "reply_ns": 50282851137291,
+          "sampled_upper_ns": 50282557760333,
+          "decoded": "RC00000223",
+          "frame": 547,
+          "generated_ns": 50282339735458,
+          "lower_ms": 0.0,
+          "upper_ms": 218.024875,
+          "screenshot_round_trip_ms": 646.50225
+        },
+        {
+          "screenshot": "screenshot-017.png",
+          "request_ns": 50283123291000,
+          "reply_ns": 50283908855666,
+          "sampled_upper_ns": 50283628066000,
+          "decoded": "RC00000244",
+          "frame": 580,
+          "generated_ns": 50283441296625,
+          "lower_ms": 0.0,
+          "upper_ms": 186.769375,
+          "screenshot_round_trip_ms": 785.564666
+        },
+        {
+          "screenshot": "screenshot-018.png",
+          "request_ns": 50284173082958,
+          "reply_ns": 50284809481833,
+          "sampled_upper_ns": 50284519458833,
+          "decoded": "RC0000025E",
+          "frame": 606,
+          "generated_ns": 50284306541708,
+          "lower_ms": 0.0,
+          "upper_ms": 212.917125,
+          "screenshot_round_trip_ms": 636.398875
+        },
+        {
+          "screenshot": "screenshot-019.png",
+          "request_ns": 50285083920041,
+          "reply_ns": 50285946855833,
+          "sampled_upper_ns": 50285444190625,
+          "decoded": "RC0000027A",
+          "frame": 634,
+          "generated_ns": 50285240026083,
+          "lower_ms": 0.0,
+          "upper_ms": 204.164542,
+          "screenshot_round_trip_ms": 862.935792
+        },
+        {
+          "screenshot": "screenshot-020.png",
+          "request_ns": 50286220724625,
+          "reply_ns": 50286967906000,
+          "sampled_upper_ns": 50286686080333,
+          "decoded": "RC0000029F",
+          "frame": 671,
+          "generated_ns": 50286477668541,
+          "lower_ms": 0.0,
+          "upper_ms": 208.411792,
+          "screenshot_round_trip_ms": 747.181375
+        },
+        {
+          "screenshot": "screenshot-021.png",
+          "request_ns": 50287239493041,
+          "reply_ns": 50287893177166,
+          "sampled_upper_ns": 50287609338666,
+          "decoded": "RC000002BC",
+          "frame": 700,
+          "generated_ns": 50287444229833,
+          "lower_ms": 0.0,
+          "upper_ms": 165.108833,
+          "screenshot_round_trip_ms": 653.684125
+        },
+        {
+          "screenshot": "screenshot-022.png",
+          "request_ns": 50288163964208,
+          "reply_ns": 50288799478250,
+          "sampled_upper_ns": 50288511086625,
+          "decoded": "RC000002D6",
+          "frame": 726,
+          "generated_ns": 50288306388125,
+          "lower_ms": 0.0,
+          "upper_ms": 204.6985,
+          "screenshot_round_trip_ms": 635.514042
+        },
+        {
+          "screenshot": "screenshot-023.png",
+          "request_ns": 50289070100500,
+          "reply_ns": 50289779433750,
+          "sampled_upper_ns": 50289467045416,
+          "decoded": "RC000002F3",
+          "frame": 755,
+          "generated_ns": 50289273136500,
+          "lower_ms": 0.0,
+          "upper_ms": 193.908916,
+          "screenshot_round_trip_ms": 709.33325
+        },
+        {
+          "screenshot": "screenshot-024.png",
+          "request_ns": 50290052693083,
+          "reply_ns": 50290653300416,
+          "sampled_upper_ns": 50290346717541,
+          "decoded": "RC0000030E",
+          "frame": 782,
+          "generated_ns": 50290177655875,
+          "lower_ms": 0.0,
+          "upper_ms": 169.061666,
+          "screenshot_round_trip_ms": 600.607333
+        },
+        {
+          "screenshot": "screenshot-025.png",
+          "request_ns": 50290923132250,
+          "reply_ns": 50291577958083,
+          "sampled_upper_ns": 50291281516916,
+          "decoded": "RC00000329",
+          "frame": 809,
+          "generated_ns": 50291073062875,
+          "lower_ms": 0.0,
+          "upper_ms": 208.454041,
+          "screenshot_round_trip_ms": 654.825833
+        },
+        {
+          "screenshot": "screenshot-026.png",
+          "request_ns": 50291854789125,
+          "reply_ns": 50292487714500,
+          "sampled_upper_ns": 50292193652333,
+          "decoded": "RC00000344",
+          "frame": 836,
+          "generated_ns": 50291977644208,
+          "lower_ms": 0.0,
+          "upper_ms": 216.008125,
+          "screenshot_round_trip_ms": 632.925375
+        },
+        {
+          "screenshot": "screenshot-027.png",
+          "request_ns": 50292754940875,
+          "reply_ns": 50293386666750,
+          "sampled_upper_ns": 50293113882916,
+          "decoded": "RC00000361",
+          "frame": 865,
+          "generated_ns": 50292944321083,
+          "lower_ms": 0.0,
+          "upper_ms": 169.561833,
+          "screenshot_round_trip_ms": 631.725875
+        },
+        {
+          "screenshot": "screenshot-028.png",
+          "request_ns": 50293651940000,
+          "reply_ns": 50294262296291,
+          "sampled_upper_ns": 50293967991041,
+          "decoded": "RC0000037B",
+          "frame": 891,
+          "generated_ns": 50293810979166,
+          "lower_ms": 0.0,
+          "upper_ms": 157.011875,
+          "screenshot_round_trip_ms": 610.356291
+        },
+        {
+          "screenshot": "screenshot-029.png",
+          "request_ns": 50294532757541,
+          "reply_ns": 50295155793041,
+          "sampled_upper_ns": 50294858573833,
+          "decoded": "RC00000394",
+          "frame": 916,
+          "generated_ns": 50294644311000,
+          "lower_ms": 0.0,
+          "upper_ms": 214.262833,
+          "screenshot_round_trip_ms": 623.0355
+        }
+      ],
+      "endpoint": "synthetic frame generation to compositor screenshot sampling",
+      "excluded": [
+        "physical source capture",
+        "physical display scanout and response"
+      ],
+      "sampling_bound": "request start to first PNG signature received",
+      "caveats": [
+        "snapshot frame age is not first-presentation latency",
+        "screencap perturbs the device; header arrival is only an upper bound",
+        "a synthetic QR scene is not representative camera content"
+      ],
+      "build": "binaries already current (90e5b2c55f60f228)",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "warning",
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        "rgb24",
+        "-video_size",
+        "1920x1080",
+        "-framerate",
+        "30",
+        "-i",
+        "pipe:0",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-tune",
+        "zerolatency",
+        "-bf",
+        "0",
+        "-g",
+        "15",
+        "-r",
+        "30",
+        "-vf",
+        "scale=-2:'min(1080,ih)'",
+        "-pix_fmt",
+        "yuv420p",
+        "-flvflags",
+        "no_duration_filesize",
+        "-flush_packets",
+        "1",
+        "-f",
+        "flv",
+        "tcp://127.0.0.1:52589"
+      ],
+      "source_frames": 940,
+      "source_fps": 29.995760425707047,
+      "lower_ms": {
+        "count": 30,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0
+      },
+      "upper_ms": {
+        "count": 30,
+        "p50": 202.3635,
+        "p95": 263.26,
+        "max": 265.0095
+      },
+      "screenshot_round_trip_ms": {
+        "count": 30,
+        "p50": 646.028042,
+        "p95": 850.555333,
+        "max": 862.935792
+      },
+      "unique_frames": 30,
+      "measurement_end": {
+        "now_ns": 173459964259646,
+        "root": true,
+        "cameraserver": {
+          "running": true,
+          "pid": 22358
+        },
+        "feeder": {
+          "running": true,
+          "pid": 22780
+        },
+        "payload": {
+          "injected": true,
+          "control_version": 2,
+          "speaks_version": 2,
+          "active": true,
+          "generation": 302,
+          "hooks_installed": 1,
+          "owner_pid": 22358,
+          "owner_base": "0x74f14ca000",
+          "control_addr": "0x77acaa4000"
+        },
+        "ring": {
+          "present": true,
+          "version": 4,
+          "speaks_version": 4,
+          "bytes": 37605376,
+          "published": 932,
+          "consumed": 1027,
+          "dropped": 0,
+          "producer_skipped": 0,
+          "lanes": [
+            {
+              "index": 0,
+              "req_width": 1440,
+              "req_height": 1080,
+              "width": 1440,
+              "height": 1080,
+              "served": true,
+              "published": 932,
+              "age_ms": 5
+            }
+          ]
+        }
+      },
+      "passed": true,
+      "final": {
+        "now_ns": 173466053523646,
+        "root": true,
+        "cameraserver": {
+          "running": true,
+          "pid": 22358
+        },
+        "feeder": {
+          "running": false,
+          "pid": 0
+        },
+        "payload": {
+          "injected": true,
+          "control_version": 2,
+          "speaks_version": 2,
+          "active": false,
+          "generation": 302,
+          "hooks_installed": 0,
+          "owner_pid": 22358,
+          "owner_base": "0x0",
+          "control_addr": "0x77acaa4000"
+        },
+        "ring": {
+          "present": false
+        }
+      }
+    }
+  },
+  "native": {
+    "ring_ownership": "host ASan/UBSan, host TSan, Android ARM64 passed",
+    "ring_restart": "real memfd + SIGKILL child + surviving-reader validation passed",
+    "hook_reuse_cycles": 3000,
+    "hook_shutdown_restarts": 100,
+    "lifecycle_checks": 23,
+    "payload_identity": "GNU note validation and deployed payload build-ID check passed"
+  },
+  "python_tests": {
+    "tools": 12,
+    "desktop": 6
+  },
+  "builds": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "runtime_tested": [
+    "Android 16 ARM64"
+  ],
+  "final": {
+    "now_ns": 173764519098664,
+    "root": true,
+    "cameraserver": {
+      "running": true,
+      "pid": 22358
+    },
+    "feeder": {
+      "running": false,
+      "pid": 0
+    },
+    "payload": {
+      "injected": true,
+      "control_version": 2,
+      "speaks_version": 2,
+      "active": false,
+      "generation": 303,
+      "hooks_installed": 0,
+      "owner_pid": 22358,
+      "owner_base": "0x0",
+      "control_addr": "0x77acaa4000"
+    },
+    "ring": {
+      "present": false
+    }
+  },
+  "limitations": [
+    "Old and different-build images remain mapped; this change prevents per-start allocation through same-build reuse, not dlclose.",
+    "60 sampled screenshots do not establish absence of all future fallback.",
+    "Optical latency remains unmeasured.",
+    "x86_64 runtime and Android 12 were not rerun for this pass."
+  ],
+  "stream_validation_build": "90e5b2c55f60f228",
+  "resident_selftests": {
+    "initial": {
+      "now_ns": 173696926041506,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 302,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    },
+    "results": [
+      {
+        "iteration": 1,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 2,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 3,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 4,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 5,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 6,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 7,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 8,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 9,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 10,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 11,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 12,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 13,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 14,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 15,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 16,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 17,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 18,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 19,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 20,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 21,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 22,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 23,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 24,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 25,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 26,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 27,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 28,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 29,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 30,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 31,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 32,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 33,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 34,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 35,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 36,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 37,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 38,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 39,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 40,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 41,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 42,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 43,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 44,
+        "exit": 0,
+        "pid": 22358
+      },
+      {
+        "iteration": 45,
+        "exit": 0,
+        "pid": 22358
+      }
+    ],
+    "build": "deployed build 24c394dd11ca7c8e from /Users/ak4ne/Projects/ReCam/desktop/recam_ui/payload/arm64-v8a",
+    "base": "0x74f23a7000",
+    "passed": true,
+    "final": {
+      "now_ns": 173745692411663,
+      "root": true,
+      "cameraserver": {
+        "running": true,
+        "pid": 22358
+      },
+      "feeder": {
+        "running": false,
+        "pid": 0
+      },
+      "payload": {
+        "injected": true,
+        "control_version": 2,
+        "speaks_version": 2,
+        "active": false,
+        "generation": 303,
+        "hooks_installed": 0,
+        "owner_pid": 22358,
+        "owner_base": "0x0",
+        "control_addr": "0x77acaa4000"
+      },
+      "ring": {
+        "present": false
+      }
+    }
+  }
+}

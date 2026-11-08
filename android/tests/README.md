@@ -176,3 +176,51 @@ Native test commands link the C++ runtime statically so a clean emulator does no
 need a separately deployed `libc++_shared.so`. API 31 emulator component tests passed;
 its full gralloc self-test crashed the host graphics emulator. See the
 [compatibility report](../../benchmarks/extended-2026-11-08.md) for the exact scope.
+
+## Reader ownership and resident reuse
+
+`ring_access.cpp` pins a frame across 10,000 newer publications, saturates all
+slots, aborts a write, and checks concurrent copies. It runs on the host and Android:
+
+```sh
+c++ -std=c++17 -O1 -g -pthread -fsanitize=address,undefined \
+  android/tests/ring_access.cpp -o /tmp/recam-ring-test
+/tmp/recam-ring-test
+```
+
+Run a separate build with `-fsanitize=thread` for race detection. `ring_restart.cpp`
+uses a real shared memfd and a killed child producer to verify exclusive flock
+ownership, abandoned-write recovery, and preservation of reader pins. On Android:
+
+```sh
+"$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang++" \
+  -O1 -std=c++17 -static-libstdc++ -Wall -Wextra -Werror \
+  android/tests/ring_restart.cpp -o /tmp/recam-ring-restart-test
+adb push /tmp/recam-ring-restart-test /data/local/tmp/
+adb shell /data/local/tmp/recam-ring-restart-test
+```
+
+`hook_shutdown.cpp` also checks 100 retirement/restart transitions, refusal while
+a callback is active, and late disabled callbacks during restart preparation.
+`hook_reuse.cpp` reinstalls each of three actual ARM64 hooks 1,000 times, verifies
+that trampoline addresses never change, and calls the original after removal.
+The full self-test also caches its three hook records across invocations:
+
+```sh
+"$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang++" \
+  -O1 -std=c++17 -static-libstdc++ -Wall -Wextra -Werror \
+  android/tests/hook_reuse.cpp android/src/payload/inlinehook_arm64.cpp \
+  android/src/payload/tramp_alloc.cpp android/src/payload/tramp_arena.S \
+  android/src/payload/selftest_targets.S -llog -o /tmp/recam-hook-reuse-test
+adb push /tmp/recam-hook-reuse-test /data/local/tmp/
+adb shell /data/local/tmp/recam-hook-reuse-test
+```
+
+`payload_identity.cpp` checks truncated/malformed GNU notes and exact build-ID
+matching. Compile it with the same NDK C++17/static-runtime flags, then run it
+with `/data/local/tmp/librecam.so` as its argument. It also runs on ELF hosts;
+macOS lacks the required system `elf.h`.
+
+The [reliability report](../../benchmarks/reliability-2026-11-08.md) records
+same-build mapping/RSS checks, live switching, feeder restarts, and screenshot
+sampling. Old images are not unloaded; same-build starts reuse one resident image.

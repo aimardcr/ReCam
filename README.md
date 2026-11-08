@@ -188,6 +188,13 @@ ready codec output before and between nonblocking input submissions and publishe
 the newest decoded frame available. It polls socket readiness with a 2 ms timeout
 for checking codec output; this is not a guarantee of OS scheduling latency.
 Older decoded frames may be superseded, while encoded reference pictures are kept.
+Camera callbacks pin their source slot until copying finishes. The producer
+never overwrites a pinned slot or the current publication; if no other slot is
+available, it skips that decoded publication and retains the last complete frame.
+`recam status` exposes this as `ring.producer_skipped`. Sequence numbers can skip
+occupied slots and are identifiers, not a count of input frames. Lane resizing
+and retirement cannot change geometry under a reader. An exclusive ring-fd lock
+permits one producer and lets a replacement recover abandoned writes after a crash.
 A short input gap retains the last published frame. After two seconds without a
 new live frame, the feeder resumes paced file/pattern output; disconnecting also
 restores that fallback. File playback retains its original frame interval.
@@ -208,10 +215,15 @@ the trampoline remain valid for callbacks already running when the hook is remov
 Substitution is then disabled, and the frame-ring mapping and fd are released when
 the final in-flight callback returns. Stop never waits on a callback because the
 injector may have interrupted that very thread. Payload images and trampolines
-still remain mapped; rings retained by older builds require process restart to
-reclaim. A successfully retired image is not reused by a later injection.
-The SELinux-compatible file-loading fallback stages a fresh inode/path for each
-injection and unlinks it after loading. It never overwrites a still-mapped payload.
+remain mapped as a reusable resident image. A later start with the same GNU ELF
+build ID reuses that image and its immutable original trampoline after ring
+retirement completes. The injector resumes the process between bounded retries
+if callbacks are still retiring. It does not wait inside a borrowed camera thread.
+This removes per-start image/trampoline allocation; it does not unload older
+images. A changed build loads a fresh image, and mappings retained by older builds
+still require process restart to reclaim.
+The SELinux-compatible file-loading fallback stages a fresh inode/path for a new
+load and unlinks it afterward. It never overwrites a still-mapped payload.
 
 After closing codecs, sockets, and mappings, `recam feed` flushes diagnostics and
 exits without running process-global destructors. This avoids an observed Android
@@ -299,8 +311,9 @@ dequeue time includes codec buffering and feeder polling, not just decoder work.
 
 Profiling is off by default. For manual collection, start the feeder with
 `RECAM_PROFILE=1 /data/local/tmp/recam feed` and collect `adb logcat -s ReCamLatency`.
-The feeder enables consumer logging through shared-memory ring version 3; rebuild
-both binaries and re-inject when upgrading from version 2. The profiler defaults
+The feeder enables consumer logging through shared-memory ring version 4; rebuild
+both binaries and re-inject when upgrading from version 2 or 3. Version 4 adds
+reader ownership and per-slot publication metadata. The profiler defaults
 to FLV; pass `--transport annexb` for a raw-stream comparison. Both use the same
 encoder settings and measurement endpoints.
 
@@ -338,6 +351,8 @@ being reported as zero latency. Use
 
 Extended stability and Android 12 compatibility results:
 [extended validation report](benchmarks/extended-2026-11-08.md).
+Follow-up slot ownership, resident reuse, and crash-recovery validation:
+[reliability report](benchmarks/reliability-2026-11-08.md).
 
 Analysis regression checks:
 
