@@ -51,8 +51,6 @@ int recam::cli::stop()
 
     const bool ok = t::shutdown_payload(kmgr, ctrlAddr);
 
-    if (!kmgr.trace.waitSyscall())
-        KITTY_LOGW("waitSyscall before detach failed; detaching anyway.");
 
     t::release(kmgr, pid);
 

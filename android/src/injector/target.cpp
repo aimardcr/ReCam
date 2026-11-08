@@ -17,6 +17,30 @@ namespace recam::target {
 
 const char* const kProcName = "cameraserver";
 
+// CLI commands own one ptrace session at a time. Remote libc/payload calls use
+// the borrowed thread's TLS: registers alone do not preserve its errno.
+static uintptr_t savedErrnoAddress = 0;
+static int savedErrno = 0;
+static KittyMemoryMgr* errnoOwner = nullptr;
+
+static bool save_remote_errno(KittyMemoryMgr& kmgr)
+{
+    const auto libc = kmgr.elfScanner.findElf("/libc.so", EScanElfType::Native,
+                                            EScanElfFilter::System);
+    const uintptr_t accessor = libc.findSymbol("__errno");
+    if (!accessor) return false;
+    // Bionic's accessor only returns the current thread's errno address.
+    const auto call = kmgr.trace.callFunction(accessor);
+    if (call.status != KT_RP_CALL_SUCCESS || !call.result.ptr) return false;
+    const uintptr_t address = reinterpret_cast<uintptr_t>(call.result.ptr);
+    int value = 0;
+    if (kmgr.readMem(address, &value, sizeof(value)) != sizeof(value)) return false;
+    savedErrnoAddress = address;
+    savedErrno = value;
+    errnoOwner = &kmgr;
+    return true;
+}
+
 int sdk_level()
 {
     FILE* p = popen("getprop ro.build.version.sdk", "r");
@@ -133,6 +157,13 @@ bool attach(KittyMemoryMgr& kmgr, pid_t pid, int sdk, int timeoutMs, bool* seize
         return false;
     }
 
+    // Initialize local access/scanners before the first remote libc call.
+    if (!kmgr.initialize(pid, EK_MEM_OP_SYSCALL, true) || !save_remote_errno(kmgr)) {
+        KITTY_LOGE("Cannot preserve borrowed thread errno; refusing remote work.");
+        release(kmgr, pid);
+        return false;
+    }
+
     if (seizedOut) *seizedOut = seized;
     KITTY_LOGI("Attached.");
     return true;
@@ -140,6 +171,20 @@ bool attach(KittyMemoryMgr& kmgr, pid_t pid, int sdk, int timeoutMs, bool* seize
 
 void release(KittyMemoryMgr& kmgr, pid_t pid)
 {
+    if (errnoOwner == &kmgr) {
+        int current = 0;
+        kmgr.readMem(savedErrnoAddress, &current, sizeof(current));
+        if (kmgr.writeMem(savedErrnoAddress, &savedErrno, sizeof(savedErrno)) != sizeof(savedErrno))
+            KITTY_LOGE("Failed to restore borrowed thread errno at %p.",
+                       reinterpret_cast<void*>(savedErrnoAddress));
+        else if (current != savedErrno)
+            KITTY_LOGI("Restored borrowed thread errno %d -> %d.", current, savedErrno);
+        errnoOwner = nullptr;
+        savedErrnoAddress = 0;
+        // Restore TLS BEFORE letting original code run toward a syscall stop.
+        if (!kmgr.trace.waitSyscall())
+            KITTY_LOGW("waitSyscall before detach failed; detaching anyway.");
+    }
     kmgr.trace.detach();
     // Non-main threads stay SIGSTOPped until this runs.
     if (kill(pid, SIGCONT) == -1)

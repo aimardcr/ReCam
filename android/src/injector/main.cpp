@@ -436,8 +436,6 @@ int recam::cli::inject()
     }
 
     // ---- detach -------------------------------------------------------------------
-    if (!kmgr.trace.waitSyscall())
-        KITTY_LOGW("waitSyscall before detach failed; detaching anyway.");
 
     tgt::release(kmgr, pid);
 

@@ -26,7 +26,7 @@ uintptr_t find_control_block(pid_t pid);
 // Stop all threads, resume the main one, and attach; always resumed on failure.
 bool attach(KittyMemoryMgr& kmgr, pid_t pid, int sdk, int timeoutMs, bool* seizedOut);
 
-// Detach AND SIGCONT. Must be called on every path that attached.
+// Restore borrowed-thread errno, detach, and SIGCONT. Required after attach.
 void release(KittyMemoryMgr& kmgr, pid_t pid);
 
 // Read the control block and validate it. False if absent or not ours.

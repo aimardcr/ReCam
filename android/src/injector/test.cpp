@@ -77,8 +77,6 @@ int recam::cli::test()
         else               { KITTY_LOGE("Self-test: %ld check(s) FAILED.", failures); }
     }
 
-    if (!kmgr.trace.waitSyscall())
-        KITTY_LOGW("waitSyscall before detach failed; detaching anyway.");
     t::release(kmgr, pid);
     return rc;
 }
