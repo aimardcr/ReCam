@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest a new capability or an improvement to ReCam.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for new capabilities. For something that does not work as expected,
+        please use the **Bug report / device compatibility** form so we receive the diagnostics.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe your use case and the limitation you encounter today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe how you would like ReCam to work. Include relevant platforms, devices, or camera apps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and additional context
+      description: Optional workarounds, examples, screenshots, or related issues.
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for this feature.
+          required: true

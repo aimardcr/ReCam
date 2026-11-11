@@ -1,0 +1,174 @@
+name: Bug report / device compatibility
+description: Report a crash, streaming problem, or an unsupported device or camera app.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe what fails and include the diagnostics below so we can investigate.
+        Check the [latest release](https://github.com/aimardcr/ReCam/releases/latest) and
+        [existing issues](https://github.com/aimardcr/ReCam/issues) first.
+        For a desktop startup problem, enter **N/A — fails before connecting** in device-only fields.
+        If a command cannot run, include its error instead of leaving the diagnostics blank.
+
+  - type: input
+    id: version
+    attributes:
+      label: ReCam version and download
+      description: Give the release version and archive name, or the commit SHA if built from source. Say whether you also tried the latest release.
+      placeholder: "v0.1.2, ReCam-v0.1.2-windows-x64.zip; also reproduced on the latest release"
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Desktop OS and architecture
+      description: Include your OS version and CPU architecture, and whether you use the desktop UI or CLI only.
+      placeholder: "Windows 11 x64, desktop UI; or macOS 15 ARM64, CLI only"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Android device
+      description: Manufacturer and exact model number. For an emulator, include the image name and architecture.
+      placeholder: "OnePlus 9, LE2115"
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Android version and ROM / firmware build
+      description: Include the Android version, stock or custom ROM, and full firmware/build number.
+      placeholder: "Android 13, OxygenOS, LE2115_13.1.0.592(EX01)"
+    validations:
+      required: true
+
+  - type: input
+    id: root
+    attributes:
+      label: Root method and relevant modules
+      description: Root manager and version (or no root), plus camera-related, hooking, or root-hiding modules if enabled.
+      placeholder: "Magisk <version>; no camera-related modules"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Input source
+      options:
+        - Test pattern
+        - Video file on the device
+        - FFmpeg input
+        - RTMP / OBS
+        - Camera / virtual camera
+        - Multiple sources (describe below)
+        - Not applicable (startup, installation, or CLI problem)
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Source and camera-app setup
+      description: |
+        Name the source device/file type or FFmpeg command, and the target app/browser and version.
+        Include front/rear camera, resolution/FPS, and whether preview, photo capture, or the saved
+        recording is affected. If it works in one app or mode but not another, list both.
+      placeholder: |
+        Source: OBS Virtual Camera, 1280x720 at 30 FPS
+        Target: stock Camera app, rear camera, video at 1080p30
+        Works: browser preview
+        Fails: stock Camera preview and saved recording
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the buttons or CLI commands used, in order, and how often the issue occurs.
+      placeholder: |
+        1. Connect the phone and select ...
+        2. Start ReCam using ...
+        3. Open ... and begin recording ...
+        4. The problem occurs ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Describe what you expected and what actually appears (real camera, color bars, black/frozen frames, incorrect colors, or a crash). Include exact error messages.
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: pattern
+    attributes:
+      label: Does the built-in Test pattern work?
+      description: Try it in the affected app/mode. This separates source/decoder problems from camera-buffer problems. Explain partial results or why you could not test it in the diagnostics field.
+      options:
+        - Works in the affected app/mode
+        - Fails in the same way
+        - Different result or only some modes work (describe below)
+        - Cannot test / not applicable (explain below)
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ### Collect diagnostics
+        Run this on the host **before starting ReCam**, reproduce the issue, then press Ctrl+C:
+
+        ```sh
+        adb logcat -b all -v threadtime -s ReCam KittyMemoryEx AndroidRuntime libc DEBUG > recam-logcat.txt
+        ```
+
+        While the failure is visible, run these in another terminal:
+
+        ```sh
+        adb shell su -c '/data/local/tmp/recam status' > recam-status.txt
+        adb shell dumpsys media.camera > camera-service.txt
+        ```
+
+        With multiple devices connected, add `-s DEVICE_SERIAL` immediately after `adb`.
+        These commands assume v0.1.2 or newer. If your root setup uses a different command,
+        run `recam status` as root using your usual method and include the output.
+        Attach the three files below, along with any errors from the ReCam desktop log.
+        For a desktop startup failure, include the launch error or terminal output instead.
+        You may redact personal paths, device serial numbers, and unrelated app information.
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic files and errors
+      description: Drag the logcat, status, and camera-service files here, or paste their output. Include desktop errors and any Test pattern details. If a diagnostic is unavailable, explain why and include the command's error.
+      placeholder: "Attach files or paste output here. Explain any unavailable diagnostics."
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or a short recording
+      description: Optional, but useful for visual corruption or a preview/recording mismatch.
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I included the requested diagnostics, or explained which ones I could not collect and why.
+          required: true

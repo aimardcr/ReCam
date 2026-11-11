@@ -386,6 +386,16 @@ c++ -std=c++17 android/tests/latency.cpp -o /tmp/recam-timeline-test
 /tmp/recam-timeline-test
 ```
 
+## Reporting issues
+
+Use the [issue forms](https://github.com/aimardcr/ReCam/issues/new/choose) for bug
+reports and feature requests. Bug reports require the ReCam version, host/device
+and firmware details, root setup, input source, affected app/mode, reproduction
+steps, and diagnostic output. The form includes commands for collecting logs and
+camera-service state. If a diagnostic cannot be collected, include the error and
+explain why. Check whether the built-in Test pattern reproduces the problem, and
+state whether preview and saved recordings behave differently.
+
 ## Layout
 
 ```
