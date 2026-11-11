@@ -10,6 +10,7 @@
 #include "framehook.hpp"
 #include "inlinehook.hpp"
 #include "bufferlock.hpp"
+#include "qcom_ubwc.hpp"
 #include "framesource.hpp"
 #include "shmsource.hpp"
 
@@ -20,10 +21,10 @@
 
 namespace recam {
 
-// IMPLEMENTATION_DEFINED is accepted only because the gralloc driver can describe it.
+// UBWC has its own converter; it must never reach the linear CPU-write path.
 bool framehook_format_supported(int32_t f)
 {
-    if (f == 0x23 || f == 0x32315659)        // YCbCr_420_888, YV12
+    if (f == 0x23 || f == 0x32315659 || f == kQcomNv12Ubwc)
         return true;
     return f == 0x22 && bufferlock_have_ycbcr();  // IMPLEMENTATION_DEFINED
 }
@@ -95,6 +96,7 @@ void reclaim_ring_if_idle()
             __atomic_store_n(&g_lifecycle, Retiring, __ATOMIC_SEQ_CST);
             continue; // closes the last-disabled-callback election race
         }
+        qcom_ubwc_release();
         shmsource_destroy();
         __atomic_store_n(&g_lifecycle, Dormant, __ATOMIC_SEQ_CST);
         return;
@@ -220,7 +222,21 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
         if (!skip && !camera_geometry_supported(static_cast<uint32_t>(aw), static_cast<uint32_t>(ah)))
             skip = "unsupported dimensions";
 
-        if (!skip) {
+        if (!skip && afmt == kQcomNv12Ubwc) {
+            FrameSource* used = qcom_ubwc_fill(*sb.buffer, aw, ah, sb.releaseFence, g_shm, g_bars);
+            if (used) {
+                const uint64_t count = __atomic_add_fetch(&g_substituted, 1, __ATOMIC_RELAXED);
+                if (used == g_bars && diagnostics)
+                    __atomic_add_fetch(&diagnostics->fallbackFrames, 1, __ATOMIC_RELAXED);
+                if (log_stream(thiz, used->name(), aw, ah, afmt))
+                    LOGI("sub %llu [%s] stream=%p %dx%d QCOM_NV12_UBWC via C2D",
+                         static_cast<unsigned long long>(count), used->name(), thiz, aw, ah);
+            } else {
+                skip = "UBWC conversion unavailable";
+            }
+        }
+
+        if (!skip && afmt != kQcomNv12Ubwc) {
             void* anw = const_cast<uint8_t*>(
                 reinterpret_cast<const uint8_t*>(sb.buffer)) - kAnwHandleOff;
 
@@ -287,7 +303,8 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
         if (skip) {
             const uint64_t count = __atomic_add_fetch(&g_passedThrough, 1, __ATOMIC_RELAXED);
             if (diagnostics) {
-                if (strcmp(skip, "unsupported format") == 0) {
+                if (strcmp(skip, "unsupported format") == 0 ||
+                    strcmp(skip, "UBWC conversion unavailable") == 0) {
                     __atomic_add_fetch(&diagnostics->unsupportedFormat, 1, __ATOMIC_RELAXED);
                     __atomic_store_n(&diagnostics->lastUnsupportedFormat, static_cast<uint32_t>(afmt), __ATOMIC_RELAXED);
                 } else if (strcmp(skip, "lock failed") == 0)
