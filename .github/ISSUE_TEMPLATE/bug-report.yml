@@ -137,9 +137,15 @@ body:
         While the failure is visible, run these in another terminal:
 
         ```sh
-        adb shell su -c '/data/local/tmp/recam status' > recam-status.txt
+        adb shell "su -c '/data/local/tmp/recam status'" > recam-status.txt
         adb shell dumpsys media.camera > camera-service.txt
         ```
+
+        If status reports `inaccessible or not found`, try an interactive shell:
+        run `adb shell`, then `su`, then `/data/local/tmp/recam status`, and paste the JSON.
+        Capture status while ReCam is started and the failure is visible. For preview
+        versus recording problems, collect camera-service output in each affected mode;
+        the photo/video resolution setting may differ from the actual preview size.
 
         With multiple devices connected, add `-s DEVICE_SERIAL` immediately after `adb`.
         These commands assume v0.1.2 or newer. If your root setup uses a different command,
