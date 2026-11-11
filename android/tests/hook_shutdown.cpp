@@ -10,6 +10,7 @@ namespace recam {
 static uint8_t pixels[6];
 static unsigned destroyed = 0;
 static bool remove_ok = true;
+ShmHeader* shmsource_header() { return nullptr; }
 void shmsource_destroy() { ++destroyed; }
 bool bufferlock_have_ycbcr() { return true; }
 bool bufferlock_init() { return true; }

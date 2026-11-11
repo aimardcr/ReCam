@@ -3,6 +3,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "../common/frame_geometry.hpp"
 
 namespace recam {
 
@@ -22,11 +23,14 @@ struct FrameTarget {
 
     bool valid() const
     {
-        return width > 1 && height > 1 &&
-               y.data && cb.data && cr.data &&
-               y.rowStride  >= width && y.pixelStride  >= 1 &&
-               cb.rowStride > 0      && cb.pixelStride >= 1 &&
-               cr.rowStride > 0      && cr.pixelStride >= 1;
+        if (!camera_geometry_supported(static_cast<uint32_t>(width), static_cast<uint32_t>(height)))
+            return false;
+        const auto plane_ok = [](const Plane& p, int columns) {
+            return p.data && p.pixelStride >= 1 && p.pixelStride <= 4 &&
+                   p.rowStride > 0 && static_cast<int64_t>(p.rowStride) >=
+                       static_cast<int64_t>(columns - 1) * p.pixelStride + 1;
+        };
+        return plane_ok(y, width) && plane_ok(cb, width / 2) && plane_ok(cr, width / 2);
     }
 };
 

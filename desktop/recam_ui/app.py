@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from .device import Device, STREAM_PORT
+from .status import lane_summary, diagnostic_summary
 from .streamer import (Streamer, camera_input, ffmpeg_input,
                        list_cameras, rtmp_input, rtmp_publish_hint)
 
@@ -82,10 +83,14 @@ class Window(QMainWindow):
         self.lbl_feeder = QLabel("-")
         self.lbl_lanes = QLabel("-")
         self.lbl_rate = QLabel("-")
+        self.lbl_diagnostics = QLabel("-")
+        self.lbl_diagnostics.setWordWrap(True)
+        self.lbl_lanes.setWordWrap(True)
         for row, (name, w) in enumerate([("Payload", self.lbl_payload),
                                          ("Feeder", self.lbl_feeder),
                                          ("Lanes", self.lbl_lanes),
-                                         ("Rate", self.lbl_rate)]):
+                                         ("Rate", self.lbl_rate),
+                                         ("Diagnostics", self.lbl_diagnostics)]):
             grid.addWidget(QLabel(name), row, 0)
             w.setTextInteractionFlags(Qt.TextSelectableByMouse)
             grid.addWidget(w, row, 1)
@@ -358,13 +363,10 @@ class Window(QMainWindow):
                                 else "not running")
 
         lanes = ring.get("lanes", [])
-        if not lanes:
-            self.lbl_lanes.setText("none - the camera is not streaming")
-        else:
-            self.lbl_lanes.setText("   ".join(
-                f"{l['width']}x{l['height']} "
-                f"{'served' if l['served'] else 'waiting'} {l['age_ms']}ms"
-                for l in lanes))
+        self.lbl_lanes.setText("; ".join(lane_summary(lane) for lane in lanes)
+                               if lanes else "No supported camera buffers observed")
+        self.lbl_diagnostics.setText(diagnostic_summary(ring) if ring.get("present")
+                                     else "No compatible frame ring; start ReCam to initialize it")
 
         self._update_rate(st, ring)
 

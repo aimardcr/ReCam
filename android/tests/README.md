@@ -224,3 +224,47 @@ macOS lacks the required system `elf.h`.
 The [reliability report](../../benchmarks/reliability-2026-11-08.md) records
 same-build mapping/RSS checks, live switching, feeder restarts, and screenshot
 sampling. Old images are not unloaded; same-build starts reuse one resident image.
+
+## Large camera outputs and compatibility diagnostics
+
+The ring remains 37,605,376 bytes in protocol version 5. Large camera requests
+are fitted to bounded stored frames, then bilinearly enlarged into validated
+strided destination planes. The production consumer and fallback can be tested
+on the host without Android dependencies:
+
+```sh
+c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pthread \
+  -fsanitize=address,undefined -Iandroid/tests/stubs \
+  android/tests/large_frames.cpp -o /tmp/recam-large-frames
+/tmp/recam-large-frames
+```
+
+Run a separate build with `-fsanitize=thread` to check simultaneous fallback
+writers. Coverage includes the reported 1960×882, 4608×2080, 4608×3456,
+4000×3000 and 4096×1840 sizes, portrait output, the pixel-budget boundary,
+planar/NV12/NV21/padded layouts, differential bilinear output, canaries, rejected
+layouts, and stale/missing producer state. The tests simulate a ring in host
+memory; they do not establish support for a vendor gralloc format.
+
+For Android, compile `large_frames.cpp` with NDK C++17, `-O2 -static-libstdc++`
+and `-llog`, without the host stub include path. Run the resulting executable on
+the phone. `feed_geometry.cpp` separately exercises the actual feeder against
+large requests using the production consumer in a disposable process:
+
+1. Close camera clients and stop any existing feeder.
+2. Inject the matching payload, then start `recam feed /data/local/tmp/unused.absent`
+   with a path that does not exist, to select the moving test pattern.
+3. Find the ring descriptor using `ls -l /proc/CAMERASERVER_PID/fd` as root.
+4. Run the compiled test as root, passing `/proc/CAMERASERVER_PID/fd/RING_FD`.
+5. Stop the feeder and payload after testing.
+
+This test requests 1960×882, 4608×3456, 4000×3000 and 1080×1920 outputs,
+verifies moving publications, consumption and destination guards, and reports
+one copy timing per size. Those timings are not end-to-end latency benchmarks.
+Keep camera clients closed: the test claims all four lanes. Re-inject afterward
+to clear its synthetic diagnostic counts.
+
+When using `tools/stress_lifecycle.py`, first stage the intended ARM64 build with
+`python3 tools/package.py --no-ndk --no-freeze`. The desktop payload lookup prefers
+that staged copy over `android/libs`; verify `recam status` reports ring version 5
+while the current-build test is running.

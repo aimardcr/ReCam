@@ -1,6 +1,7 @@
 // FrameSource backed by the shared frame ring.
 
 #include "shmsource.hpp"
+#include "blit.hpp"
 
 #include <android/log.h>
 #include <string.h>
@@ -20,9 +21,6 @@
 namespace recam {
 
 namespace {
-
-// Past this, treat the feeder as gone and fall back.
-static const uint64_t kStaleNs = 2ull * 1000 * 1000 * 1000;
 
 int      g_fd   = -1;
 uint8_t* g_base = nullptr;
@@ -47,44 +45,6 @@ int memfd_create_compat(const char* name, unsigned flags)
 #endif
 }
 
-// Every offset comes from the target's own rowStride and pixelStride.
-bool blit_i420(const uint8_t* src, uint32_t w, uint32_t h, const FrameTarget& t)
-{
-    if (static_cast<uint32_t>(t.width) != w || static_cast<uint32_t>(t.height) != h)
-        return false;   // geometry mismatch: let the real frame through
-
-    const uint8_t* sy = src;
-    const uint8_t* su = sy + static_cast<size_t>(w) * h;
-    const uint8_t* sv = su + static_cast<size_t>(w / 2) * (h / 2);
-
-    // Luma.
-    for (uint32_t row = 0; row < h; row++) {
-        uint8_t* d = t.y.data + static_cast<size_t>(row) * t.y.rowStride;
-        const uint8_t* s = sy + static_cast<size_t>(row) * w;
-        if (t.y.pixelStride == 1) {
-            memcpy(d, s, w);
-        } else {
-            for (uint32_t x = 0; x < w; x++) d[x * t.y.pixelStride] = s[x];
-        }
-    }
-
-    // pixelStride 2 means Cb and Cr interleave, so neither may be memcpy'd.
-    const uint32_t cw = w / 2, ch = h / 2;
-    for (uint32_t row = 0; row < ch; row++) {
-        uint8_t* du = t.cb.data + static_cast<size_t>(row) * t.cb.rowStride;
-        uint8_t* dv = t.cr.data + static_cast<size_t>(row) * t.cr.rowStride;
-        const uint8_t* s_u = su + static_cast<size_t>(row) * cw;
-        const uint8_t* s_v = sv + static_cast<size_t>(row) * cw;
-
-        if (t.cb.pixelStride == 1) memcpy(du, s_u, cw);
-        else for (uint32_t x = 0; x < cw; x++) du[x * t.cb.pixelStride] = s_u[x];
-
-        if (t.cr.pixelStride == 1) memcpy(dv, s_v, cw);
-        else for (uint32_t x = 0; x < cw; x++) dv[x * t.cr.pixelStride] = s_v[x];
-    }
-    return true;
-}
-
 // Claim a free lane for w x h. Two HAL threads can race; the loser retries next frame.
 ShmLane* claim_lane(ShmHeader* h, uint32_t w, uint32_t h_)
 {
@@ -107,7 +67,7 @@ public:
 
     bool fill(const FrameTarget& t) override
     {
-        if (!g_base) return false;
+        if (!g_base || !t.valid()) return false;
         ShmHeader* h = header();
 
         const uint32_t w = static_cast<uint32_t>(t.width);
@@ -119,15 +79,13 @@ public:
             if (access && lane.reqWidth == w && lane.reqHeight == hh)
                 return fill_lane(t, h, &lane);
         }
-        claim_lane(h, w, hh);
+        if (!claim_lane(h, w, hh)) __atomic_add_fetch(&h->noFreeLane, 1, __ATOMIC_RELAXED);
         return false; // a new geometry must be served before it can be copied
     }
 
 private:
     bool fill_lane(const FrameTarget& t, ShmHeader* h, ShmLane* l)
     {
-        const uint32_t w = static_cast<uint32_t>(t.width);
-        const uint32_t hh = static_cast<uint32_t>(t.height);
         // Keeps the lane alive; the feeder retires any lane nobody has asked about.
         __atomic_store_n(&l->reqNs, now_ns(), __ATOMIC_RELEASE);
 
@@ -136,9 +94,9 @@ private:
         const uint64_t seq = frame.seq;
         const uint64_t stamp = l->slotNs[frame.slot];
         const uint64_t now = now_ns();
-        if (now > stamp && now - stamp > kStaleNs) return false;
+        if (now > stamp && now - stamp > kFrameStaleNs) return false;
 
-        if (l->width != w || l->height != hh || l->bufBytes == 0) return false;
+        if (!lane_configured(*l)) return false;
 
         const uint64_t off = static_cast<uint64_t>(l->dataOffset) +
                              static_cast<uint64_t>(frame.slot) * l->bufBytes;
@@ -146,7 +104,7 @@ private:
 
         const bool profiling = __atomic_load_n(&h->profiling, __ATOMIC_ACQUIRE) != 0;
         const uint64_t copyStart = profiling ? now_ns() : 0;
-        if (!blit_i420(g_base + off, w, hh, t)) return false;
+        if (!blit_i420(g_base + off, l->width, l->height, t)) return false;
         const uint64_t copyEnd = profiling ? now_ns() : 0;
 
         if (profiling) {

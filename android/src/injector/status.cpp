@@ -110,6 +110,13 @@ int recam::cli::status()
         printf("    \"consumed\": %llu,\n", static_cast<unsigned long long>(h.consumed));
         printf("    \"dropped\": %llu,\n", static_cast<unsigned long long>(h.dropped));
         printf("    \"producer_skipped\": %llu,\n", static_cast<unsigned long long>(h.producerSkipped));
+        printf("    \"diagnostics\": { \"unsupported_format\": %llu, \"last_unsupported_format\": %u, "
+               "\"lock_failed\": %llu, \"invalid_layout\": %llu, \"unsupported_dimensions\": %llu, "
+               "\"fallback_frames\": %llu, \"no_free_lane\": %llu },\n",
+               static_cast<unsigned long long>(h.unsupportedFormat), h.lastUnsupportedFormat,
+               static_cast<unsigned long long>(h.lockFailed), static_cast<unsigned long long>(h.invalidLayout),
+               static_cast<unsigned long long>(h.unsupportedDimensions),
+               static_cast<unsigned long long>(h.fallbackFrames), static_cast<unsigned long long>(h.noFreeLane));
         printf("    \"lanes\": [");
 
         bool first = true;
@@ -122,12 +129,14 @@ int recam::cli::status()
                 ageMs = (l.publishedNs >= nowAge)
                     ? 0 : static_cast<long long>((nowAge - l.publishedNs) / 1000000ull);
 
+            const char* state = recam::lane_state(l, feeder > 0, nowAge);
             printf("%s\n      { \"index\": %u, \"req_width\": %u, \"req_height\": %u, "
                    "\"width\": %u, \"height\": %u, \"served\": %s, "
-                   "\"published\": %llu, \"age_ms\": %lld }",
+                   "\"published\": %llu, \"age_ms\": %lld, \"state\": \"%s\", \"scaled\": %s }",
                    first ? "" : ",", i, l.reqWidth, l.reqHeight, l.width, l.height,
-                   yn(l.width == l.reqWidth && l.width != 0),
-                   static_cast<unsigned long long>(l.published), ageMs);
+                   yn(strcmp(state, "served") == 0),
+                   static_cast<unsigned long long>(l.published), ageMs, state,
+                   yn(recam::lane_configured(l) && (l.width != l.reqWidth || l.height != l.reqHeight)));
             first = false;
         }
         printf("%s]\n", first ? "" : "\n    ");

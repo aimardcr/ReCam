@@ -183,7 +183,7 @@ static void service_lanes(ShmHeader* h, uint64_t nowN)
         if (!requested) continue;
         const uint64_t stamp = __atomic_load_n(&l.reqNs, __ATOMIC_ACQUIRE);
         const bool idle = nowN > stamp && nowN - stamp > kLaneIdleNs;
-        if (!idle && __atomic_load_n(&l.width, __ATOMIC_ACQUIRE) == requested) continue;
+        if (!idle && __atomic_load_n(&l.width, __ATOMIC_ACQUIRE) != 0) continue;
         recam::RingWrite access(&l.access, recam::kWriter + 1);
         if (!access) continue;
         const uint32_t rw = l.reqWidth, rh = l.reqHeight;
@@ -198,20 +198,22 @@ static void service_lanes(ShmHeader* h, uint64_t nowN)
             continue;
         }
 
-        if (l.width == rw && l.height == rh) continue;
+        if (recam::lane_configured(l)) continue;
 
-        if (rw > recam::kShmMaxWidth || rh > recam::kShmMaxHeight || (rw & 1) || (rh & 1)) {
-            KITTY_LOGW("feed: lane %u wants %ux%u, past the %ux%u cap; leaving it unserved",
-                       i, rw, rh, recam::kShmMaxWidth, recam::kShmMaxHeight);
+        uint32_t storedW, storedH;
+        if (!recam::lane_geometry(rw, rh, storedW, storedH)) {
+            // Invalid geometry is rejected before lane claims by the payload.
+            // Avoid per-frame warnings if a malformed request nevertheless arrives.
             continue;
         }
 
-        // published last: the payload only reads a lane once it is non-zero.
         l.published = 0;
-        l.bufBytes  = recam::lane_frame_bytes(rw, rh);
-        l.height    = rh;
-        __atomic_store_n(&l.width, rw, __ATOMIC_RELEASE);
-        KITTY_LOGI("feed: lane %u now serving %ux%u", i, rw, rh);
+        l.publishedNs = 0;
+        l.bufBytes  = recam::lane_frame_bytes(storedW, storedH);
+        l.height    = storedH;
+        __atomic_store_n(&l.width, storedW, __ATOMIC_RELEASE);
+        KITTY_LOGI("feed: lane %u now serving %ux%u from %ux%u stored pixels",
+                   i, rw, rh, storedW, storedH);
     }
 }
 
@@ -258,7 +260,8 @@ static Outcome attach_and_feed()
     if (base == MAP_FAILED) { KITTY_LOGE("feed: mmap: %s", strerror(errno)); return Outcome::Error; }
 
     ShmHeader* h = static_cast<ShmHeader*>(base);
-    if (h->magic != recam::kShmMagic || h->version != recam::kShmVersion) {
+    if (h->magic != recam::kShmMagic || h->version != recam::kShmVersion ||
+        h->laneCount != recam::kShmLanes || cb.shm_size != recam::shm_total_bytes()) {
         KITTY_LOGE("feed: bad ring magic/version");
         munmap(base, cb.shm_size);
         return Outcome::Error;
@@ -334,7 +337,7 @@ static Outcome attach_and_feed()
             // Only this feeder configures an occupied lane; the payload claims
             // free lanes but never edits a served lane's geometry.
             const uint32_t lw = l.width, lh = l.height;
-            if (!lw || !lh || lw != l.reqWidth || lh != l.reqHeight) continue;
+            if (!recam::lane_configured(l)) continue;
 
             recam::RingPublication publication(l);
             if (!publication.seq) {

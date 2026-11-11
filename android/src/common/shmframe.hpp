@@ -3,12 +3,13 @@
 #pragma once
 
 #include <stdint.h>
+#include "frame_geometry.hpp"
 
 namespace recam {
 
 // "RECAMSHM" little-endian.
 static const uint64_t kShmMagic   = 0x4D48534D41434552ULL;
-static const uint32_t kShmVersion = 4;
+static const uint32_t kShmVersion = 5;
 
 // Distinct camera buffer sizes served at once; a session rarely opens more.
 static const uint32_t kShmLanes = 4;
@@ -19,7 +20,8 @@ static const uint32_t kLaneBufs = 3;
 // Page-aligned, so no lane buffer shares a page with the header.
 static const uint32_t kShmArenaBase = 4096;
 
-// The largest frame a lane can hold. Bigger streams fall back to the real camera.
+// Maximum stored frame. Larger camera outputs are scaled on consumption.
+// The 35.9 MiB ring budget is unchanged regardless of requested camera size.
 static const uint32_t kShmMaxWidth  = 1920;
 static const uint32_t kShmMaxHeight = 1088;
 
@@ -61,9 +63,38 @@ struct ShmHeader {
     // Opt-in per-frame logging, enabled by RECAM_PROFILE=1 in the feeder.
     uint32_t profiling;
     uint64_t producerSkipped;  // all non-current slots pinned; last frame retained
+
+    // Cumulative since injection; status snapshots are diagnostic, not transactional.
+    uint64_t unsupportedFormat;
+    uint64_t lockFailed;
+    uint64_t invalidLayout;
+    uint64_t unsupportedDimensions;
+    uint64_t fallbackFrames;
+    uint64_t noFreeLane;
+    uint32_t lastUnsupportedFormat;
 };
 
 static_assert(sizeof(ShmHeader) <= kShmArenaBase, "header exceeds reserved page");
+
+inline bool lane_geometry(uint32_t w, uint32_t h, uint32_t& storedW, uint32_t& storedH) {
+    return fit_frame(w, h, kShmMaxWidth, kShmMaxHeight, storedW, storedH);
+}
+
+inline bool lane_configured(const ShmLane& l) {
+    uint32_t w, h;
+    return lane_geometry(l.reqWidth, l.reqHeight, w, h) && l.width == w && l.height == h &&
+           l.bufBytes == w * h * 3 / 2;
+}
+
+constexpr uint64_t kFrameStaleNs = 2000000000ull;
+inline const char* lane_state(const ShmLane& l, bool feeder, uint64_t now) {
+    uint32_t w, h;
+    if (!lane_geometry(l.reqWidth, l.reqHeight, w, h)) return "unsupported_dimensions";
+    if (!feeder) return "feeder_stopped";
+    if (!lane_configured(l) || !l.published || !l.publishedNs) return "waiting_for_frame";
+    if (now > l.publishedNs && now - l.publishedNs > kFrameStaleNs) return "stale_frame";
+    return "served";
+}
 
 inline uint32_t lane_frame_bytes(uint32_t w, uint32_t h) { return w * h * 3 / 2; }
 
