@@ -1,0 +1,263 @@
+{
+  "device": "POCO 2409FPCC4G, Android 16 / API 36",
+  "ring_version": 5,
+  "ring_bytes": 37605376,
+  "live_cycles": 8,
+  "passed": true,
+  "live_publications_consumed": 334,
+  "camera_pid_before": 22358,
+  "cycles": [
+    {
+      "cycle": 1,
+      "mode": "disconnect",
+      "size": "1280x720",
+      "file_fallback": false,
+      "feeder_pid": 12055,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 37,
+      "receive_to_copy_age_ms": {
+        "count": 62,
+        "p50": 60.351307,
+        "p95": 502.975461,
+        "max": 578.764384
+      },
+      "cameraserver_rss_kib": 69344,
+      "elapsed_seconds": 6.394623375000037
+    },
+    {
+      "cycle": 2,
+      "mode": "stop_live",
+      "size": "1920x1080",
+      "file_fallback": false,
+      "feeder_pid": 12120,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 11,
+      "receive_to_copy_age_ms": {
+        "count": 19,
+        "p50": 77.467769,
+        "p95": 267.997846,
+        "max": 267.997846
+      },
+      "cameraserver_rss_kib": 69352,
+      "elapsed_seconds": 10.232248499999969
+    },
+    {
+      "cycle": 3,
+      "mode": "pause_resume",
+      "size": "1280x720",
+      "file_fallback": false,
+      "feeder_pid": 12174,
+      "short_pause_publications": 0,
+      "fallback_publications": 23,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 37,
+      "receive_to_copy_age_ms": {
+        "count": 112,
+        "p50": 192.915692,
+        "p95": 1866.650154,
+        "max": 2023.228615
+      },
+      "cameraserver_rss_kib": 69384,
+      "elapsed_seconds": 20.267899208000017
+    },
+    {
+      "cycle": 4,
+      "mode": "reconnect",
+      "size": "1920x1080",
+      "file_fallback": false,
+      "feeder_pid": 12268,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 84,
+      "receive_to_copy_age_ms": {
+        "count": 130,
+        "p50": 57.067769,
+        "p95": 122.679154,
+        "max": 412.887692
+      },
+      "cameraserver_rss_kib": 69380,
+      "elapsed_seconds": 28.43347562500003
+    },
+    {
+      "cycle": 5,
+      "mode": "disconnect",
+      "size": "1280x720",
+      "file_fallback": true,
+      "feeder_pid": 12375,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 39,
+      "receive_to_copy_age_ms": {
+        "count": 66,
+        "p50": 65.922692,
+        "p95": 108.773462,
+        "max": 267.057462
+      },
+      "cameraserver_rss_kib": 69444,
+      "elapsed_seconds": 34.28259049999997
+    },
+    {
+      "cycle": 6,
+      "mode": "stop_live",
+      "size": "1920x1080",
+      "file_fallback": true,
+      "feeder_pid": 12476,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 10,
+      "receive_to_copy_age_ms": {
+        "count": 19,
+        "p50": 70.273846,
+        "p95": 248.304,
+        "max": 248.304
+      },
+      "cameraserver_rss_kib": 69404,
+      "elapsed_seconds": 38.19756179199999
+    },
+    {
+      "cycle": 7,
+      "mode": "pause_resume",
+      "size": "1280x720",
+      "file_fallback": true,
+      "feeder_pid": 12575,
+      "short_pause_publications": 0,
+      "fallback_publications": 13,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 42,
+      "receive_to_copy_age_ms": {
+        "count": 114,
+        "p50": 162.001231,
+        "p95": 1856.197231,
+        "max": 2010.238462
+      },
+      "cameraserver_rss_kib": 69552,
+      "elapsed_seconds": 48.619655875000035
+    },
+    {
+      "cycle": 8,
+      "mode": "reconnect",
+      "size": "1920x1080",
+      "file_fallback": true,
+      "feeder_pid": 12698,
+      "feeder_exit": 0,
+      "crashes": [],
+      "live_frames_consumed": 74,
+      "receive_to_copy_age_ms": {
+        "count": 132,
+        "p50": 67.067077,
+        "p95": 278.259461,
+        "max": 433.722692
+      },
+      "cameraserver_rss_kib": 69948,
+      "elapsed_seconds": 56.98075208299997
+    }
+  ],
+  "payload_sha256": {
+    "android/libs/arm64-v8a/recam": "3ea5c06b398cf15a9c28f26dcfb05d9abba0b76ead9330cefed03f28b5fe07f9",
+    "android/libs/arm64-v8a/librecam.so": "d359172f5d4588ef2079813cab4b2e85d872f624d0c2ac62e1bcfa821548eb7c",
+    "android/libs/x86_64/recam": "4d834b78c5ab8c3aecd74e51ff2c03186670ace4df030e60638355c070b35a48",
+    "android/libs/x86_64/librecam.so": "d34897f59db82ff8d537cb8201584ee5689d4e99daa56820784f8bba676cabcf"
+  },
+  "large_feeder_test": {
+    "now_ns": 364066896792007,
+    "root": true,
+    "cameraserver": {
+      "running": true,
+      "pid": 22358
+    },
+    "feeder": {
+      "running": true,
+      "pid": 10669
+    },
+    "payload": {
+      "injected": true,
+      "control_version": 2,
+      "speaks_version": 2,
+      "active": true,
+      "generation": 307,
+      "hooks_installed": 1,
+      "owner_pid": 22358,
+      "owner_base": "0x74f2358000",
+      "control_addr": "0x77acaa4000"
+    },
+    "ring": {
+      "present": true,
+      "version": 5,
+      "speaks_version": 5,
+      "bytes": 37605376,
+      "published": 94,
+      "consumed": 8,
+      "dropped": 0,
+      "producer_skipped": 0,
+      "diagnostics": {
+        "unsupported_format": 0,
+        "last_unsupported_format": 0,
+        "lock_failed": 0,
+        "invalid_layout": 0,
+        "unsupported_dimensions": 0,
+        "fallback_frames": 0,
+        "no_free_lane": 0
+      },
+      "lanes": [
+        {
+          "index": 0,
+          "req_width": 1960,
+          "req_height": 882,
+          "width": 1920,
+          "height": 864,
+          "served": true,
+          "published": 36,
+          "age_ms": 2,
+          "state": "served",
+          "scaled": true
+        },
+        {
+          "index": 1,
+          "req_width": 4608,
+          "req_height": 3456,
+          "width": 1450,
+          "height": 1088,
+          "served": true,
+          "published": 30,
+          "age_ms": 0,
+          "state": "served",
+          "scaled": true
+        },
+        {
+          "index": 2,
+          "req_width": 4000,
+          "req_height": 3000,
+          "width": 1450,
+          "height": 1088,
+          "served": true,
+          "published": 19,
+          "age_ms": 31,
+          "state": "served",
+          "scaled": true
+        },
+        {
+          "index": 3,
+          "req_width": 1080,
+          "req_height": 1920,
+          "width": 612,
+          "height": 1088,
+          "served": true,
+          "published": 12,
+          "age_ms": 30,
+          "state": "served",
+          "scaled": true
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "OnePlus vendor gralloc not tested locally",
+    "UBWC, BLOB and RAW pass through",
+    "No optical latency measurement",
+    "Large outputs are enlarged from bounded stored frames"
+  ]
+}

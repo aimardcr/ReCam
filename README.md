@@ -72,9 +72,23 @@ The full chain is verified on one physical device: Android 16, arm64-v8a, MediaT
 (PowerVR gralloc). Symbol resolution is verified across Android 11 through 16, and the
 dynamic-linkage path is verified on an Android 14 x86_64 emulator.
 
-Gralloc behaviour on Qualcomm and Exynos is untested. Where the device cannot describe
-a buffer, the hook passes the real frame through rather than writing a guess, so an
-unsupported device shows the real camera instead of corrupted output.
+Qualcomm coverage is partial. The [OnePlus 9 report](https://github.com/aimardcr/ReCam/issues/2)
+(Android 13) confirms substituted YUV previews, but its recording stream uses Qualcomm
+UBWC (`0x7fa30c06`), which ReCam passes through unchanged. A working preview therefore
+does not guarantee a substituted saved video or photo. JPEG/BLOB and RAW outputs are
+also passed through. The reported striped selfie capture remains under investigation;
+Exynos gralloc is untested.
+
+Current source supports even camera dimensions up to 8192 per side and 32 megapixels
+(33,554,432 pixels), when gralloc exposes valid writable YUV planes. The shared ring
+still stores at most 1920×1088 per lane, using 35.9 MiB across four lanes. Larger camera
+outputs receive an aspect-fitted feed with bilinear enlargement into the destination
+planes. This adds camera-thread copy work and does not preserve native high-resolution
+detail. Outputs within the storage limit keep the existing direct-copy path.
+
+Large-frame component and actual feeder tests passed on the connected Android 16
+POCO; this does not establish a fix on the reporter's OnePlus. See the
+[compatibility validation](benchmarks/compatibility-2026-11-11.md) for scope and limits.
 
 ## Building
 
@@ -215,7 +229,18 @@ Older decoded frames may be superseded, while encoded reference pictures are kep
 Camera callbacks pin their source slot until copying finishes. The producer
 never overwrites a pinned slot or the current publication; if no other slot is
 available, it skips that decoded publication and retains the last complete frame.
-`recam status` exposes this as `ring.producer_skipped`. Sequence numbers can skip
+`recam status` exposes this as `ring.producer_skipped`. Each lane reports requested
+camera dimensions, stored dimensions, whether it is scaled, and a state: `served`,
+`feeder_stopped`, `waiting_for_frame`, `stale_frame`, or `unsupported_dimensions`.
+`served` requires a publication no older than two seconds and a running feeder;
+it describes feed availability, not proof of recording substitution. `ring.diagnostics`
+contains cumulative counts since injection for unsupported formats, lock failures,
+invalid layouts/dimensions, fallback-bar frames, and requests without a free lane.
+The desktop State panel displays these diagnostics. Logs identify each observed
+stream/layout and lock API, then summarize identical observations at most every
+five seconds. Resolution fitting is logged once when a lane is configured.
+
+Sequence numbers can skip
 occupied slots and are identifiers, not a count of input frames. Lane resizing
 and retirement cannot change geometry under a reader. An exclusive ring-fd lock
 permits one producer and lets a replacement recover abandoned writes after a crash.
@@ -335,9 +360,10 @@ dequeue time includes codec buffering and feeder polling, not just decoder work.
 
 Profiling is off by default. For manual collection, start the feeder with
 `RECAM_PROFILE=1 /data/local/tmp/recam feed` and collect `adb logcat -s ReCamLatency`.
-The feeder enables consumer logging through shared-memory ring version 4; rebuild
-both binaries and re-inject when upgrading from version 2 or 3. Version 4 adds
-reader ownership and per-slot publication metadata. The profiler defaults
+The feeder enables consumer logging through shared-memory ring version 5; rebuild
+both binaries and re-inject when upgrading from an older version. Version 5 separates
+camera dimensions from stored feed dimensions and adds compatibility diagnostics;
+it retains version 4's reader ownership and per-slot publication metadata. The profiler defaults
 to FLV; pass `--transport annexb` for a raw-stream comparison. Both use the same
 encoder settings and measurement endpoints.
 
