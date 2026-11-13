@@ -269,6 +269,11 @@ static Outcome attach_and_feed()
 
     recam::recover_dead_producer(*h);
 
+    // Desktop verifies this acknowledgement against recam status before reporting
+    // success. Keep stdout available even when platform logcat omits an error.
+    printf("RECAM_FEED_READY pid=%d generation=%u\n", getpid(), cb.generation);
+    fflush(stdout);
+
     KITTY_LOGI("feed: attached to %s (pid %d) ring, %llu bytes, %u lanes",
                t::kProcName, pid, static_cast<unsigned long long>(cb.shm_size),
                h->laneCount);
@@ -442,6 +447,11 @@ int recam::cli::feed(int argc, char** argv)
         KITTY_LOGI("feed: no %s; using the test pattern.", src);
     }
     start_listener();
+    if (g_listenFd < 0) {
+        fprintf(stderr, "feed: could not listen on port %u; see device log\n", kListenPort);
+        g_decoder.close();
+        return 1;
+    }
 
     int rc = 0;
     while (!g_stop) {

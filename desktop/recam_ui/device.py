@@ -4,14 +4,17 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
 import threading
+import time
 
 REMOTE_DIR = "/data/local/tmp"
 REMOTE_MARKER = f"{REMOTE_DIR}/.recam_build"
 REMOTE_SOURCE = f"{REMOTE_DIR}/recam_source.mp4"
+REMOTE_FEED_LOG = f"{REMOTE_DIR}/recam-feed-start.log"
 STREAM_PORT = 27183
 
 BINARIES = ["librecam.so", "recam"]
@@ -154,12 +157,53 @@ class Device:
         self.shell(f"rm -f {REMOTE_SOURCE}")
 
     def start_feeder(self):
-        # nohup + background, so the adb shell can return while it keeps running.
-        self.shell(f"nohup {REMOTE_DIR}/recam feed >/dev/null 2>&1 &")
+        # Detach all three descriptors: nohup alone can retain adb's stdin.
+        detail = ""
+        pid = 0
+        try:
+            rc, out, err = self.shell(
+                f"(umask 077; exec nohup {REMOTE_DIR}/recam feed "
+                f"</dev/null >{REMOTE_FEED_LOG} 2>&1) & echo $!")
+            pid = int(out.strip()) if out.strip().isdigit() else 0
+            if rc or pid <= 0:
+                raise DeviceError(f"Could not launch feeder: {out} {err}")
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                _, detail, _ = self.shell(f"tail -c 65536 {REMOTE_FEED_LOG}", timeout=5)
+                st = self.status()
+                if st is not None:
+                    feeder = st.get("feeder", {})
+                    payload = st.get("payload", {})
+                    markers = re.findall(r"RECAM_FEED_READY pid=(\d+) generation=(\d+)", detail)
+                    ready = markers[-1] if markers else None
+                    if (feeder.get("running") and feeder.get("pid") == pid and ready
+                            and int(ready[0]) == pid and payload.get("active")
+                            and int(ready[1]) == payload.get("generation")):
+                        _log.info("Feeder ready: pid=%s generation=%s", pid, ready[1])
+                        return pid
+                time.sleep(0.2)
+            raise DeviceError(f"Feeder did not become ready (pid {pid}). "
+                              f"{detail.strip() or 'See the saved device/payload logs.'}")
+        except Exception:
+            _log.exception("Feeder startup failed: pid=%s output=%s", pid, detail)
+            try:
+                self.stop_feeder()
+            except Exception:
+                _log.exception("Could not clean up failed feeder startup")
+            raise
 
     def stop_feeder(self):
         # Anchor argv[0] and argv[1], excluding the shell and other subcommands.
-        self.shell(f'pkill -f "^{REMOTE_DIR}/recam feed( |$)"')
+        rc, out, err = self.shell(f'pkill -f "^{REMOTE_DIR}/recam feed( |$)"')
+        if rc not in (0, 1):
+            raise DeviceError(f"Could not stop feeder: {out} {err}")
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            st = self.status()
+            if st is not None and not st.get("feeder", {}).get("running"):
+                return
+            time.sleep(0.2)
+        raise DeviceError("Previous feeder did not stop; refusing to start a competing producer")
 
     def status(self):
         rc, out, _ = self.shell(f"{REMOTE_DIR}/recam status", timeout=15)
