@@ -112,7 +112,9 @@ def desktop(version, target, output):
     if system == "linux":
         path = output / f"ReCam-{version}-{target}.tar.gz"
         with tarfile.open(path, "w:gz") as archive:
-            archive.add(bundle, arcname="ReCam")
+            archive.add(bundle, arcname="ReCam", filter=lambda entry:
+                        None if entry.name == "ReCam/logs" or entry.name.startswith("ReCam/logs/")
+                        else entry)
             for name in ("LICENSE", "NOTICE", "README.md", "assets/recam-preview.jpg"):
                 archive.add(ROOT / name, arcname=f"ReCam/{name}")
             entry = tarfile.TarInfo("ReCam/BUILD-INFO.json")
@@ -125,7 +127,7 @@ def desktop(version, target, output):
         with zipfile.ZipFile(path, "a" if system == "macos" else "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             if system == "windows":
                 for file in sorted(bundle.rglob("*")):
-                    if file.is_file():
+                    if file.is_file() and file.relative_to(bundle).parts[0] != "logs":
                         archive.write(file, file.relative_to(bundle).as_posix())
             for name in ("LICENSE", "NOTICE", "README.md", "assets/recam-preview.jpg"):
                 archive.write(ROOT / name, name)
