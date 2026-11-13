@@ -43,6 +43,7 @@ constexpr uint32_t kCopyMask = (1 << 0) | (1 << 4) | (1 << 14) |
 constexpr uint32_t kDmaBufMemory = 3;
 
 struct C2d {
+    int (*init)(const void*) = nullptr;
     int (*create)(uint32_t*, uint32_t, uint32_t, void*) = nullptr;
     int (*destroy)(uint32_t) = nullptr;
     int (*map)(int, void*, uint32_t, uint32_t, uint32_t, void**) = nullptr;

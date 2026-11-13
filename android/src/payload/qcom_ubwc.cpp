@@ -142,6 +142,7 @@ bool initialize() {
     void* c2d = g_c2dLibrary;
     void* metadata = g_metadataLibrary;
     const bool ok =
+        symbol(c2d, "c2dDriverInit", g_c2d.init) &&
         symbol(c2d, "c2dCreateSurface", g_c2d.create) &&
         symbol(c2d, "c2dDestroySurface", g_c2d.destroy) &&
         symbol(c2d, "c2dMapAddr", g_c2d.map) &&
@@ -156,6 +157,14 @@ bool initialize() {
         symbol(RTLD_DEFAULT, "AHardwareBuffer_release", g_release) &&
         symbol(RTLD_DEFAULT, "AHardwareBuffer_getNativeHandle", g_nativeHandle);
     if (!ok) { failed("resolve C2D/allocator ABI", -ENOSYS); return false; }
+    // Mapping requires an initialized driver. A null setup selects the vendor
+    // defaults; keep this process-wide driver alive across staging retirement.
+    const int rc = g_c2d.init(nullptr);
+    if (rc) {
+        snprintf(g_initError, sizeof(g_initError), "initialize C2D driver (status=%d)", rc);
+        failed("initialize C2D driver", rc);
+        return false;
+    }
     g_available = true;
     return true;
 }
@@ -319,7 +328,7 @@ bool prepare(int w, int h, const Layout& l) {
         destroy_buffers();
         return false;
     }
-    // Surface creation initializes the driver. Query capabilities afterwards.
+    // Query capabilities before submitting work with the new staging surfaces.
     DriverInfo info{};
     const int rc = g_c2d.capabilities(&info);
     if (rc || !(info.capabilities & (1u << 18)) || info.workaround) {
