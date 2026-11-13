@@ -255,7 +255,11 @@ static Route choose_route(pid_t targetPid, const std::string& payload,
 
     std::vector<sp::Rule> missing;
     for (const auto& n : needs) {
-        if (sp::has_permission(n.scon, n.tcon, n.cls, n.perm)) {
+        const auto decision = sp::permission(n.scon, n.tcon, n.cls, n.perm);
+        if (decision == sp::Access::Unknown) {
+            KITTY_LOGW("sepolicy: UNKNOWN %s:%s { %s }; query unavailable",
+                       n.tcon.c_str(), n.cls, n.perm);
+        } else if (decision == sp::Access::Allowed) {
             KITTY_LOGI("sepolicy: ok   %s:%s { %s }", n.tcon.c_str(), n.cls, n.perm);
         } else {
             KITTY_LOGW("sepolicy: MISSING %s:%s { %s }", n.tcon.c_str(), n.cls, n.perm);
@@ -264,8 +268,7 @@ static Route choose_route(pid_t targetPid, const std::string& payload,
     }
 
     if (missing.empty()) {
-        KITTY_LOGI("sepolicy: all required permissions already granted.");
-        return Route::Memfd;
+        KITTY_LOGI("sepolicy: no confirmed denial requires a policy change.");
     }
 
     std::string tool;
@@ -274,9 +277,10 @@ static Route choose_route(pid_t targetPid, const std::string& payload,
     // Trust the kernel AVC, not the patch tool's exit code.
     bool allOk = true;
     for (const auto& n : needs) {
-        bool ok = sp::has_permission(n.scon, n.tcon, n.cls, n.perm);
+        const auto decision = sp::permission(n.scon, n.tcon, n.cls, n.perm);
+        bool ok = decision == sp::Access::Allowed;
         KITTY_LOGI("sepolicy: verify %s:%s { %s } -> %s",
-                   n.tcon.c_str(), n.cls, n.perm, ok ? "GRANTED" : "STILL DENIED");
+                   n.tcon.c_str(), n.cls, n.perm, ok ? "GRANTED" : decision == sp::Access::Denied ? "STILL DENIED" : "UNKNOWN");
         if (!ok) allOk = false;
     }
 
@@ -340,6 +344,7 @@ int recam::cli::inject()
     // Before attaching, so the target is never left stopped during a patch.
     std::string stagedPath;
     const recam::StagedFileCleanup stagedCleanup{stagedPath};
+    sp::prepare_c2d(pid);
     const Route route = choose_route(pid, libPath, &stagedPath);
     if (route == Route::None) {
         KITTY_LOGE("No usable way to load the payload into %s: memfd needs a policy "

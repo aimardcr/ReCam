@@ -8,6 +8,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
+#include <climits>
+#include <algorithm>
+#include <cctype>
 
 #include <KittyUtils.hpp>
 
@@ -101,11 +105,21 @@ Avc query(const std::string& scon, const std::string& tcon, const char* cls)
 
     // Transaction file: the reply is readable only from the fd that wrote it.
     int fd = ::open((std::string(kSelinuxFs) + "/access").c_str(), O_RDWR | O_CLOEXEC);
-    if (fd < 0) return r;
+    if (fd < 0) {
+        KITTY_LOGW("sepolicy: cannot open access transaction: %s", strerror(errno));
+        return r;
+    }
 
     char req[512];
     int n = snprintf(req, sizeof(req), "%s %s %d", scon.c_str(), tcon.c_str(), clsNum);
-    if (n <= 0 || ::write(fd, req, static_cast<size_t>(n)) != n) {
+    if (n <= 0 || n >= static_cast<int>(sizeof(req))) {
+        ::close(fd);
+        return r;
+    }
+    // selinuxfs accepts one complete request per descriptor, not partial writes.
+    if (::write(fd, req, static_cast<size_t>(n)) != n) {
+        KITTY_LOGW("sepolicy: access query failed for %s -> %s:%s: %s",
+                   scon.c_str(), tcon.c_str(), cls, strerror(errno));
         ::close(fd);
         return r;
     }
@@ -129,17 +143,20 @@ Avc query(const std::string& scon, const std::string& tcon, const char* cls)
 
 }  // namespace
 
+Access permission(const std::string& scon, const std::string& tcon,
+                  const char* cls, const char* perm)
+{
+    uint32_t bit = perm_bit(cls, perm);
+    if (!bit) return Access::Unknown;
+    Avc a = query(scon, tcon, cls);
+    if (!a.ok) return Access::Unknown;
+    return a.permissive || (a.allowed & bit) ? Access::Allowed : Access::Denied;
+}
+
 bool has_permission(const std::string& scon, const std::string& tcon,
                     const char* cls, const char* perm)
 {
-    uint32_t bit = perm_bit(cls, perm);
-    if (!bit) return false;
-
-    Avc a = query(scon, tcon, cls);
-    if (!a.ok) return false;
-
-    // A permissive source domain will not be denied anything, so treat it as granted.
-    return a.permissive || (a.allowed & bit) != 0;
+    return permission(scon, tcon, cls, perm) == Access::Allowed;
 }
 
 // --------------------------------------------------------------------------- patching
@@ -147,7 +164,7 @@ bool has_permission(const std::string& scon, const std::string& tcon,
 namespace {
 
 struct PatchTool {
-    const char* path;
+    std::string path;
     const char* argfmt;   // %s is replaced by the quoted rule statement
 };
 
@@ -158,19 +175,74 @@ const PatchTool kTools[] = {
     { "/data/adb/magisk/magiskpolicy",  "--live '%s'" },           // Magisk
     { "/system/bin/magiskpolicy",       "--live '%s'" },
     { "/sbin/magiskpolicy",             "--live '%s'" },
+    { "/debug_ramdisk/magiskpolicy",    "--live '%s'" },
     { "/system/bin/supolicy",           "--live '%s'" },           // SuperSU
 };
 
 bool exists(const char* p)
 {
     struct stat st{};
-    return ::stat(p, &st) == 0;
+    return ::stat(p, &st) == 0 && S_ISREG(st.st_mode) && ::access(p, X_OK) == 0;
 }
 
 bool run(const std::string& cmd)
 {
     int rc = ::system(cmd.c_str());
     return rc == 0;
+}
+
+std::string quote(const std::string& value)
+{
+    std::string out = "'";
+    for (char c : value) out += c == '\'' ? "'\\''" : std::string(1, c);
+    return out + "'";
+}
+
+std::string on_path(const char* name)
+{
+    const char* env = getenv("PATH");
+    if (!env) return {};
+    std::string path(env);
+    size_t start = 0;
+    do {
+        const auto end = path.find(':', start);
+        const auto dir = path.substr(start, end - start);
+        if (!dir.empty() && dir[0] == '/') {
+            const auto candidate = dir + "/" + name;
+            if (exists(candidate.c_str())) return candidate;
+        }
+        if (end == std::string::npos) break;
+        start = end + 1;
+    } while (start < path.size());
+    return {};
+}
+
+std::vector<PatchTool> patch_tools()
+{
+    std::vector<PatchTool> tools;
+    for (const auto& tool : kTools)
+        if (exists(tool.path.c_str())) tools.push_back(tool);
+    for (const char* name : {"magiskpolicy", "supolicy"}) {
+        const auto path = on_path(name);
+        if (!path.empty() && std::none_of(tools.begin(), tools.end(),
+            [&](const PatchTool& tool) { return tool.path == path; }))
+            tools.push_back({path, "--live '%s'"});
+    }
+    if (!tools.empty()) return tools;
+    // Magisk's tmpfs location varies by boot layout; ask its installed executable.
+    const auto magisk = on_path("magisk");
+    if (magisk.empty()) return tools;
+    FILE* pipe = popen((quote(magisk) + " --path 2>/dev/null").c_str(), "r");
+    if (!pipe) return tools;
+    char buf[PATH_MAX]{};
+    const bool got = fgets(buf, sizeof(buf), pipe) != nullptr;
+    const int rc = pclose(pipe);
+    if (!got || rc != 0 || buf[0] != '/') return tools;
+    std::string dir(buf);
+    while (!dir.empty() && (dir.back() == '\n' || dir.back() == '\r')) dir.pop_back();
+    const auto policy = dir + "/magiskpolicy";
+    if (exists(policy.c_str())) tools.push_back({policy, "--live '%s'"});
+    return tools;
 }
 
 }  // namespace
@@ -193,17 +265,16 @@ bool apply_live(const std::vector<Rule>& rules, std::string* toolUsed)
 {
     if (rules.empty()) return true;
 
-    for (const auto& tool : kTools) {
-        if (!exists(tool.path)) continue;
+    for (const auto& tool : patch_tools()) {
 
-        KITTY_LOGI("sepolicy: using %s", tool.path);
+        KITTY_LOGI("sepolicy: using %s", tool.path.c_str());
 
         bool all = true;
         for (const auto& r : rules) {
             char args[768];
             snprintf(args, sizeof(args), tool.argfmt, r.statement.c_str());
 
-            std::string cmd = std::string(tool.path) + " " + args + " >/dev/null 2>&1";
+            std::string cmd = quote(tool.path) + " " + args;
             KITTY_LOGI("sepolicy:   %s", r.statement.c_str());
             KITTY_LOGI("sepolicy:     (%s)", r.reason.c_str());
 
@@ -215,12 +286,69 @@ bool apply_live(const std::vector<Rule>& rules, std::string* toolUsed)
 
         // Report the tool even on partial failure; the caller re-checks the AVC.
         if (toolUsed) *toolUsed = tool.path;
-        return all;
+        if (all) return true;
     }
 
-    KITTY_LOGE("sepolicy: no policy patch tool found "
+    KITTY_LOGE("sepolicy: no policy patch tool succeeded "
                "(looked for ksud, magiskpolicy, supolicy).");
     return false;
+}
+
+void prepare_c2d(pid_t targetPid)
+{
+    if (!available() || !enforcing()) return;
+    const auto source = process_context(targetPid);
+    if (context_type(source) != "cameraserver") return;
+    const char* paths[] = {"/vendor/lib64/libC2D2.so", "/vendor/lib64/libc2d30_bltlib.so",
+                           "/vendor/lib64/libqdMetaData.so"};
+    std::vector<std::string> contexts;
+    for (const char* path : paths) {
+        const auto targetPath = "/proc/" + std::to_string(targetPid) + "/root" + path;
+        struct stat st{};
+        if (stat(targetPath.c_str(), &st) || !S_ISREG(st.st_mode)) continue;
+        char label[512]{};
+        const ssize_t size = lgetxattr(targetPath.c_str(), "security.selinux", label, sizeof(label) - 1);
+        if (size <= 0) {
+            KITTY_LOGW("C2D: cannot read label of %s: %s", path, strerror(errno));
+            continue;
+        }
+        const std::string context(label);
+        const auto type = context_type(context);
+        if (type.empty() || !std::all_of(type.begin(), type.end(),
+            [](unsigned char c) { return std::isalnum(c) || c == '_'; })) continue;
+        if (std::find(contexts.begin(), contexts.end(), context) == contexts.end())
+            contexts.push_back(context);
+    }
+    const char* perms[] = {"open", "read", "getattr", "map", "execute"};
+    std::vector<Rule> missing;
+    for (const auto& context : contexts) {
+        for (const char* perm : perms) {
+            const auto decision = permission(source, context, "file", perm);
+            if (decision == Access::Unknown) {
+                KITTY_LOGW("C2D: policy query unavailable for %s:file %s; no rule inferred",
+                           context.c_str(), perm);
+                continue;
+            }
+            if (decision == Access::Allowed) continue;
+            missing.push_back({"allow cameraserver " + context_type(context) + " file " + perm,
+                               "load installed Qualcomm C2D libraries in cameraserver"});
+        }
+    }
+    if (missing.empty()) return;
+    std::string tool;
+    apply_live(missing, &tool);
+    bool ready = true;
+    for (const auto& context : contexts) {
+        for (const char* perm : perms) {
+            const auto result = permission(source, context, "file", perm);
+            if (result == Access::Allowed) continue;
+            ready = false;
+            KITTY_LOGW("C2D: %s:file %s remains %s", context.c_str(), perm,
+                       result == Access::Denied ? "denied" : "unverified");
+        }
+    }
+    KITTY_LOGI("C2D: library access %s%s%s", ready ? "granted" : "unavailable",
+               tool.empty() ? "" : " via ", tool.c_str());
 }
 
 }  // namespace recam::sepolicy
