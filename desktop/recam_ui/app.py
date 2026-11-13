@@ -227,6 +227,8 @@ class Window(QMainWindow):
                 self._log("no device selected")
             return None
         if self.device is None or self.device.serial != serial:
+            if self.device:
+                self.device.close_feeder_session()
             self._device_logs.stop()
             self.device = Device(serial)
         return self.device
@@ -305,25 +307,36 @@ class Window(QMainWindow):
             else:
                 dev.clear_source()
 
-            rc, _, se = dev.inject()
-            out.append(f"inject rc={rc}" + (f" {se}" if se else ""))
+            try:
+                rc, _, se = dev.inject()
+                out.append(f"inject rc={rc}" + (f" {se}" if se else ""))
 
-            dev.stop_feeder()
-            dev.start_feeder()
-            out.append("feeder started")
+                dev.stop_feeder()
+                dev.start_feeder()
+                out.append("feeder started")
 
-            if mode in (SRC_FFMPEG, SRC_RTMP, SRC_CAMERA):
-                dev.forward(STREAM_PORT)
-                out.append(f"forwarded tcp:{STREAM_PORT}")
-                if mode == SRC_FFMPEG:
-                    args = ffmpeg_input(ff_text)
-                elif mode == SRC_RTMP:
-                    args = rtmp_input()
-                    server, key = rtmp_publish_hint()
-                    out.append(f"waiting for a publisher - Server {server}, Key {key}")
-                else:
-                    args = camera_input(camera)
-                self.streamer.start(args, STREAM_PORT)
+                if mode in (SRC_FFMPEG, SRC_RTMP, SRC_CAMERA):
+                    dev.forward(STREAM_PORT)
+                    out.append(f"forwarded tcp:{STREAM_PORT}")
+                    if mode == SRC_FFMPEG:
+                        args = ffmpeg_input(ff_text)
+                    elif mode == SRC_RTMP:
+                        args = rtmp_input()
+                        server, key = rtmp_publish_hint()
+                        out.append(f"waiting for a publisher - Server {server}, Key {key}")
+                    else:
+                        args = camera_input(camera)
+                    self.streamer.start(args, STREAM_PORT)
+            except Exception:
+                # Injection may already have succeeded. Restore the camera even
+                # when feeder startup or a later desktop step fails.
+                for cleanup in (self.streamer.stop, dev.stop_feeder,
+                                dev.stop_payload, dev.remove_forward):
+                    try:
+                        cleanup()
+                    except Exception:
+                        logging.getLogger("recam").exception("Failed Start cleanup: %s", cleanup.__name__)
+                raise
             return "\n".join(out)
 
         self._start_job(work, "Start")
@@ -413,6 +426,7 @@ class Window(QMainWindow):
         self.streamer.stop()
         try:
             if self.device:
+                self.device.close_feeder_session()
                 self.device.remove_forward(STREAM_PORT)
         except Exception:
             logging.getLogger("recam").exception("Cannot remove ADB forward during exit")

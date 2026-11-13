@@ -1,5 +1,6 @@
 """Every adb invocation lives here; nothing else builds an adb command line."""
 
+from collections import deque
 import hashlib
 import json
 import logging
@@ -58,6 +59,10 @@ def build_id(libs_dir):
 class Device:
     def __init__(self, serial=None, adb=None):
         self.serial = serial
+        self._feed_proc = None
+        self._feed_thread = None
+        self._feed_output = deque(maxlen=32)
+        self._feed_lock = threading.Lock()
         self.adb = adb or shutil.which("adb")
         if not self.adb:
             raise DeviceError("adb is not on PATH")
@@ -156,29 +161,75 @@ class Device:
     def clear_source(self):
         self.shell(f"rm -f {REMOTE_SOURCE}")
 
+    def close_feeder_session(self):
+        proc, reader = self._feed_proc, self._feed_thread
+        if proc is None:
+            return
+        try:
+            proc.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=2)
+        if reader:
+            reader.join(timeout=1)
+        self._feed_proc = self._feed_thread = None
+
+    def _read_feeder_session(self, proc):
+        with proc.stdout:
+            while True:
+                line = proc.stdout.readline(4096)
+                if not line:
+                    return
+                with self._feed_lock:
+                    self._feed_output.append(line)
+                _log.info("Feeder session: %s", line.rstrip())
+
     def start_feeder(self):
-        # Detach all three descriptors: nohup alone can retain adb's stdin.
+        if self._feed_proc is not None:
+            raise DeviceError("Previous feeder session is still owned; stop it first")
         detail = ""
         pid = 0
         try:
-            rc, out, err = self.shell(
-                f"(umask 077; exec nohup {REMOTE_DIR}/recam feed "
-                f"</dev/null >{REMOTE_FEED_LOG} 2>&1) & echo $!")
-            pid = int(out.strip()) if out.strip().isdigit() else 0
-            if rc or pid <= 0:
-                raise DeviceError(f"Could not launch feeder: {out} {err}")
+            # Keep adb/su alive until Stop; a background shell PID is not proof
+            # that the feeder survived its launching shell's exit.
+            cmd = (f"umask 077; exec {REMOTE_DIR}/recam feed "
+                   f"</dev/null >{REMOTE_FEED_LOG} 2>&1")
+            argv = self._argv(["shell", f"su -c '{cmd}'"])
+            _log.info("Feeder session command: %r", argv)
+            with self._feed_lock:
+                self._feed_output.clear()
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, encoding="utf-8", errors="replace",
+                                    creationflags=_NO_WINDOW)
+            self._feed_proc = proc
+            self._feed_thread = threading.Thread(target=self._read_feeder_session,
+                                                 args=(proc,), daemon=True)
+            self._feed_thread.start()
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:
                 _, detail, _ = self.shell(f"tail -c 65536 {REMOTE_FEED_LOG}", timeout=5)
+                if proc.poll() is not None:
+                    self._feed_thread.join(timeout=1)
+                    with self._feed_lock:
+                        session_output = "".join(self._feed_output).strip()
+                    raise DeviceError(f"Feeder session exited (code {proc.returncode}): "
+                                      f"{session_output or detail.strip() or 'no startup output'}")
+                markers = re.findall(r"RECAM_FEED_READY pid=(\d+) generation=(\d+)", detail)
+                ready = markers[-1] if markers else None
                 st = self.status()
-                if st is not None:
+                if st is not None and ready:
                     feeder = st.get("feeder", {})
                     payload = st.get("payload", {})
-                    markers = re.findall(r"RECAM_FEED_READY pid=(\d+) generation=(\d+)", detail)
-                    ready = markers[-1] if markers else None
-                    if (feeder.get("running") and feeder.get("pid") == pid and ready
-                            and int(ready[0]) == pid and payload.get("active")
-                            and int(ready[1]) == payload.get("generation")):
+                    pid = int(ready[0])
+                    if (pid > 0 and feeder.get("running") and feeder.get("pid") == pid
+                            and payload.get("active")
+                            and int(ready[1]) == payload.get("generation")
+                            and proc.poll() is None):
                         _log.info("Feeder ready: pid=%s generation=%s", pid, ready[1])
                         return pid
                 time.sleep(0.2)
@@ -193,17 +244,20 @@ class Device:
             raise
 
     def stop_feeder(self):
-        # Anchor argv[0] and argv[1], excluding the shell and other subcommands.
-        rc, out, err = self.shell(f'pkill -f "^{REMOTE_DIR}/recam feed( |$)"')
-        if rc not in (0, 1):
-            raise DeviceError(f"Could not stop feeder: {out} {err}")
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            st = self.status()
-            if st is not None and not st.get("feeder", {}).get("running"):
-                return
-            time.sleep(0.2)
-        raise DeviceError("Previous feeder did not stop; refusing to start a competing producer")
+        try:
+            # Anchor argv[0] and argv[1], excluding the shell and other subcommands.
+            rc, out, err = self.shell(f'pkill -f "^{REMOTE_DIR}/recam feed( |$)"')
+            if rc not in (0, 1):
+                raise DeviceError(f"Could not stop feeder: {out} {err}")
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                st = self.status()
+                if st is not None and not st.get("feeder", {}).get("running"):
+                    return
+                time.sleep(0.2)
+            raise DeviceError("Previous feeder did not stop; refusing to start a competing producer")
+        finally:
+            self.close_feeder_session()
 
     def status(self):
         rc, out, _ = self.shell(f"{REMOTE_DIR}/recam status", timeout=15)
