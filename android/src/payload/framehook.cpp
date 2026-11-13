@@ -384,6 +384,7 @@ bool framehook_install(uintptr_t target)
         g_shm  = shmsource_get();
         g_bars = colorbars_source();
     }
+    qcom_ubwc_retry_initialization();
     __atomic_store_n(&g_lifecycle, Running, __ATOMIC_SEQ_CST);
     __atomic_store_n(&g_enabled, 1, __ATOMIC_SEQ_CST);
     LOGI("framehook: sources = %s + %s",

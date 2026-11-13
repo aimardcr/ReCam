@@ -14,4 +14,7 @@ FrameSource* qcom_ubwc_fill(const void* handle, int width, int height, int fence
 // Called after camera callbacks drain. Never waits for GPU completion.
 void qcom_ubwc_release();
 
+// Permit one new initialization attempt on a real callback after Start.
+void qcom_ubwc_retry_initialization();
+
 } // namespace recam

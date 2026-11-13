@@ -6,6 +6,7 @@
 #include <android/hardware_buffer.h>
 #include <android/log.h>
 #include <cerrno>
+#include <cstdio>
 #include <dlfcn.h>
 #include <linux/dma-buf.h>
 #include <poll.h>
@@ -32,6 +33,11 @@ Release g_release = nullptr;
 NativeHandle g_nativeHandle = nullptr;
 GetMetadata g_metadata = nullptr;
 bool g_tried = false, g_available = false, g_poisoned = false;
+uint32_t g_initEpoch = 0, g_attemptEpoch = 0;
+char g_initError[512] = "initialization unavailable";
+void* g_supportLibrary = nullptr;
+void* g_c2dLibrary = nullptr;
+void* g_metadataLibrary = nullptr;
 uint64_t g_retryAfter = 0, g_lastLog = 0;
 int g_fence = -1;
 bool g_pending = false;
@@ -86,30 +92,55 @@ void failed(const char* stage, int status) {
 }
 
 template <typename T> bool symbol(void* library, const char* name, T& out) {
+    dlerror();
     out = reinterpret_cast<T>(dlsym(library, name));
-    if (!out) __android_log_print(ANDROID_LOG_WARN, "ReCam", "UBWC: missing symbol %s", name);
+    if (!out) {
+        const char* error = dlerror();
+        snprintf(g_initError, sizeof(g_initError), "missing symbol %s: %s", name,
+                 error ? error : "unavailable");
+        __android_log_print(ANDROID_LOG_WARN, "ReCam", "UBWC: %s", g_initError);
+    }
     return out != nullptr;
 }
 
+using Load = void* (*)(const char*, int);
+bool vendor_library(void*& library, Load load, const char* name, const char* path) {
+    if (library) return true;
+    char sphalError[192] = "SP-HAL loader unavailable";
+    if (load) {
+        dlerror();
+        library = load(name, RTLD_NOW | RTLD_LOCAL);
+        if (library) return true;
+        const char* error = dlerror();
+        snprintf(sphalError, sizeof(sphalError), "%s", error ? error : "unavailable");
+    }
+    dlerror();
+    library = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+    if (library) return true;
+    const char* error = dlerror();
+    snprintf(g_initError, sizeof(g_initError), "load %s: %s; SP-HAL: %s",
+             name, error ? error : "unavailable", sphalError);
+    __android_log_print(ANDROID_LOG_WARN, "ReCam", "UBWC: %s", g_initError);
+    return false;
+}
+
 bool initialize() {
-    if (g_tried) return g_available;
+    if (g_available) return true;
+    const auto epoch = __atomic_load_n(&g_initEpoch, __ATOMIC_ACQUIRE);
+    if (g_tried && g_attemptEpoch == epoch) return false;
+    g_attemptEpoch = epoch;
     g_tried = true;
     // Invoked lazily on a real callback, never while the injector has borrowed
     // a cameraserver thread. Keep driver libraries loaded for this image's life.
-    void* support = dlopen("libvndksupport.so", RTLD_NOW | RTLD_LOCAL);
-    using Load = void* (*)(const char*, int);
-    auto load = support ? reinterpret_cast<Load>(dlsym(support, "android_load_sphal_library")) : nullptr;
-    void* c2d = load ? load("libC2D2.so", RTLD_NOW | RTLD_LOCAL) : nullptr;
-    if (!c2d) c2d = dlopen("/vendor/lib64/libC2D2.so", RTLD_NOW | RTLD_LOCAL);
-    void* metadata = load ? load("libqdMetaData.so", RTLD_NOW | RTLD_LOCAL) : nullptr;
-    if (!metadata) metadata = dlopen("/vendor/lib64/libqdMetaData.so", RTLD_NOW | RTLD_LOCAL);
-    if (!c2d || !metadata) {
-        const char* error = dlerror();
-        __android_log_print(ANDROID_LOG_WARN, "ReCam",
-                           "UBWC: vendor load C2D=%d metadata=%d error=%s",
-                           c2d != nullptr, metadata != nullptr, error ? error : "unavailable");
+    if (!g_supportLibrary) g_supportLibrary = dlopen("libvndksupport.so", RTLD_NOW | RTLD_LOCAL);
+    auto load = g_supportLibrary ? reinterpret_cast<Load>(
+        dlsym(g_supportLibrary, "android_load_sphal_library")) : nullptr;
+    if (!vendor_library(g_c2dLibrary, load, "libC2D2.so", "/vendor/lib64/libC2D2.so") ||
+        !vendor_library(g_metadataLibrary, load, "libqdMetaData.so", "/vendor/lib64/libqdMetaData.so")) {
         failed("load vendor libraries", -ENOENT); return false;
     }
+    void* c2d = g_c2dLibrary;
+    void* metadata = g_metadataLibrary;
     const bool ok =
         symbol(c2d, "c2dCreateSurface", g_c2d.create) &&
         symbol(c2d, "c2dDestroySurface", g_c2d.destroy) &&
@@ -292,6 +323,7 @@ bool prepare(int w, int h, const Layout& l) {
     DriverInfo info{};
     const int rc = g_c2d.capabilities(&info);
     if (rc || !(info.capabilities & (1u << 18)) || info.workaround) {
+        snprintf(g_initError, sizeof(g_initError), "unsupported C2D capabilities/workarounds (status=%d)", rc);
         failed("UBWC capability/workaround", rc ? rc : -ENOTSUP);
         destroy_buffers();
         g_available = false;
@@ -304,6 +336,11 @@ bool prepare(int w, int h, const Layout& l) {
 
 } // namespace
 
+void qcom_ubwc_retry_initialization() {
+    // Driver work remains on the next real camera callback, once per Start.
+    __atomic_add_fetch(&g_initEpoch, 1u, __ATOMIC_RELEASE);
+}
+
 FrameSource* qcom_ubwc_fill(const void* native, int w, int h, int fence,
                           FrameSource* source, FrameSource* fallback) {
     Handle handle;
@@ -315,7 +352,7 @@ FrameSource* qcom_ubwc_fill(const void* native, int w, int h, int fence,
     if (!guard) return rejected("converter busy", native, w, h);
     if (g_poisoned) return rejected("disabled after GPU failure", native, w, h);
     if (now_ns() < g_retryAfter) return nullptr;
-    if (!initialize()) return rejected("initialization unavailable (cached)", native, w, h);
+    if (!initialize()) return rejected(g_initError, native, w, h);
     if (!start_retire_worker()) return rejected("retirement worker", native, w, h);
     __atomic_store_n(&g_retired, 0u, __ATOMIC_RELEASE);
     // QTI stores alternate linear/interlaced geometry in metadata. A missing
