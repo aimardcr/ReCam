@@ -45,6 +45,36 @@ uint64_t now_ns() {
     return uint64_t(ts.tv_sec) * 1000000000ull + ts.tv_nsec;
 }
 
+// Keep the reason visible even after a cached failure or Stop/Start. The
+// callback may be concurrent; this log throttle does not acquire the GPU lock.
+FrameSource* rejected(const char* stage, const void* native, int w, int h,
+                      int status = 0, int value1 = 0, int value2 = 0) {
+    static uint64_t last = 0;
+    const auto now = now_ns();
+    auto before = __atomic_load_n(&last, __ATOMIC_RELAXED);
+    if (before && now - before < 5000000000ull) return nullptr;
+    if (!__atomic_compare_exchange_n(&last, &before, now, false,
+                                     __ATOMIC_RELAXED, __ATOMIC_RELAXED)) return nullptr;
+    const int version = native ? field<int>(native, 0) : -1;
+    const int fds = native ? field<int>(native, 4) : -1;
+    const int ints = native ? field<int>(native, 8) : -1;
+    __android_log_print(ANDROID_LOG_WARN, "ReCam",
+        "UBWC rejected: %s; requested=%dx%d status=%d values=%d,%d ABI=%d/%d/%d",
+        stage, w, h, status, value1, value2, version, fds, ints);
+    if (native && version == 12 && fds == 2 && ints == 23) {
+        __android_log_print(ANDROID_LOG_WARN, "ReCam",
+            "UBWC handle: magic=0x%x flags=0x%x format=0x%x aligned=%dx%d "
+            "requested=%dx%d layers=%u usage=0x%llx size=%u offset=%u metadata_mapped=%d",
+            field<uint32_t>(native, 20), field<uint32_t>(native, 24), field<int>(native, 44),
+            field<int>(native, 28), field<int>(native, 32), field<int>(native, 36),
+            field<int>(native, 40), field<uint32_t>(native, 52),
+            static_cast<unsigned long long>(field<uint64_t>(native, 64)),
+            field<uint32_t>(native, 72), field<uint32_t>(native, 76),
+            field<uint64_t>(native, 92) != 0);
+    }
+    return nullptr;
+}
+
 void failed(const char* stage, int status) {
     const auto now = now_ns();
     if (now - g_lastLog >= 5000000000ull || !g_lastLog) {
@@ -57,6 +87,7 @@ void failed(const char* stage, int status) {
 
 template <typename T> bool symbol(void* library, const char* name, T& out) {
     out = reinterpret_cast<T>(dlsym(library, name));
+    if (!out) __android_log_print(ANDROID_LOG_WARN, "ReCam", "UBWC: missing symbol %s", name);
     return out != nullptr;
 }
 
@@ -72,7 +103,13 @@ bool initialize() {
     if (!c2d) c2d = dlopen("/vendor/lib64/libC2D2.so", RTLD_NOW | RTLD_LOCAL);
     void* metadata = load ? load("libqdMetaData.so", RTLD_NOW | RTLD_LOCAL) : nullptr;
     if (!metadata) metadata = dlopen("/vendor/lib64/libqdMetaData.so", RTLD_NOW | RTLD_LOCAL);
-    if (!c2d || !metadata) { failed("load vendor libraries", -ENOENT); return false; }
+    if (!c2d || !metadata) {
+        const char* error = dlerror();
+        __android_log_print(ANDROID_LOG_WARN, "ReCam",
+                           "UBWC: vendor load C2D=%d metadata=%d error=%s",
+                           c2d != nullptr, metadata != nullptr, error ? error : "unavailable");
+        failed("load vendor libraries", -ENOENT); return false;
+    }
     const bool ok =
         symbol(c2d, "c2dCreateSurface", g_c2d.create) &&
         symbol(c2d, "c2dDestroySurface", g_c2d.destroy) &&
@@ -271,25 +308,34 @@ FrameSource* qcom_ubwc_fill(const void* native, int w, int h, int fence,
                           FrameSource* source, FrameSource* fallback) {
     Handle handle;
     Layout l;
-    if (!read_handle(native, handle) || !layout(w, h, l) || !matches(handle, w, h, l)) return nullptr;
+    if (!read_handle(native, handle)) return rejected("handle ABI/flags", native, w, h);
+    if (!layout(w, h, l)) return rejected("dimensions", native, w, h);
+    if (!matches(handle, w, h, l)) return rejected("allocation layout", native, w, h);
     RingWrite guard(&g_access);
-    if (!guard || g_poisoned || now_ns() < g_retryAfter || !initialize()) return nullptr;
-    if (!start_retire_worker()) return nullptr;
+    if (!guard) return rejected("converter busy", native, w, h);
+    if (g_poisoned) return rejected("disabled after GPU failure", native, w, h);
+    if (now_ns() < g_retryAfter) return nullptr;
+    if (!initialize()) return rejected("initialization unavailable (cached)", native, w, h);
+    if (!start_retire_worker()) return rejected("retirement worker", native, w, h);
     __atomic_store_n(&g_retired, 0u, __ATOMIC_RELEASE);
     // QTI stores alternate linear/interlaced geometry in metadata. A missing
     // entry returns -EINVAL; accept only the ordinary progressive allocation.
     // Require an already mapped metadata handle to avoid treating map errors as
     // absent metadata. Camera buffers have been imported by GraphicBufferMapper.
-    if (!field<uint64_t>(native, 92)) return nullptr;
+    if (!field<uint64_t>(native, 92)) return rejected("metadata not mapped", native, w, h);
     int interlaced = 0, linear = 0;
     int geometry[2]{};
     int rc = g_metadata(native, 4, &interlaced);
-    if ((rc && rc != -EINVAL) || interlaced) return nullptr;
+    if ((rc && rc != -EINVAL) || interlaced)
+        return rejected("interlace metadata", native, w, h, rc, interlaced);
     rc = g_metadata(native, 0x1000, &linear);
-    if ((rc && rc != -EINVAL) || (!rc && linear != kQcomNv12Ubwc)) return nullptr;
+    if ((rc && rc != -EINVAL) || (!rc && linear != kQcomNv12Ubwc))
+        return rejected("linear-format metadata", native, w, h, rc, linear);
     rc = g_metadata(native, 0x80, geometry);
-    if ((rc && rc != -EINVAL) || (!rc && (geometry[0] != w || geometry[1] != h))) return nullptr;
-    if (wait_fence(fence, 30) != 1 || !prepare(w, h, l)) return nullptr;
+    if ((rc && rc != -EINVAL) || (!rc && (geometry[0] != w || geometry[1] != h)))
+        return rejected("geometry metadata", native, w, h, rc, geometry[0], geometry[1]);
+    if (wait_fence(fence, 30) != 1) return rejected("camera fence", native, w, h);
+    if (!prepare(w, h, l)) return rejected("staging preparation", native, w, h);
 
     if (!cpu_sync(g_linear.fd, DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE)) return nullptr;
     FrameTarget t;

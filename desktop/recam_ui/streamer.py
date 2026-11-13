@@ -1,6 +1,7 @@
 """The desktop half of live feeding: ffmpeg into the forwarded TCP port."""
 
 import os
+import logging
 import re
 import shlex
 import shutil
@@ -70,8 +71,10 @@ def list_cameras(ffmpeg=None):
 
     p = subprocess.run([ffmpeg, "-hide_banner", "-list_devices", "true",
                         "-f", "dshow", "-i", "dummy"],
-                       capture_output=True, text=True, timeout=30,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
                        creationflags=_NO_WINDOW)
+    logging.getLogger("recam.ffmpeg").info("Camera enumeration: rc=%s stdout=%s stderr=%s",
+                                          p.returncode, p.stdout, p.stderr)
     out = []
     for line in p.stderr.splitlines():
         m = _DSHOW_LINE.search(line)
@@ -107,7 +110,11 @@ class Streamer:
 
     def __init__(self, on_line=None, ffmpeg=None):
         self.ffmpeg = ffmpeg or shutil.which("ffmpeg")
-        self._on_line = on_line or (lambda s: None)
+        def report(line):
+            logging.getLogger("recam.ffmpeg").info("%s", line)
+            if on_line:
+                on_line(line)
+        self._on_line = report
         self._proc = None
 
     def running(self):
@@ -123,6 +130,7 @@ class Streamer:
         self._on_line(" ".join(argv))
         self._proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL,
                                       stderr=subprocess.PIPE, text=True,
+                                      encoding="utf-8", errors="replace",
                                       bufsize=1, creationflags=_NO_WINDOW)
         threading.Thread(target=self._drain, args=(self._proc,), daemon=True).start()
 

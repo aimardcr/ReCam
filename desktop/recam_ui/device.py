@@ -2,10 +2,12 @@
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import subprocess
 import sys
+import threading
 
 REMOTE_DIR = "/data/local/tmp"
 REMOTE_MARKER = f"{REMOTE_DIR}/.recam_build"
@@ -17,6 +19,7 @@ EXECUTABLES = [b for b in BINARIES if not b.endswith(".so")]
 
 # Windows would otherwise flash a console window for every adb call.
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+_log = logging.getLogger("recam.adb")
 
 
 class DeviceError(Exception):
@@ -65,8 +68,16 @@ class Device:
         return base + list(args)
 
     def _run(self, args, timeout=30):
-        p = subprocess.run(self._argv(args), capture_output=True, text=True,
-                           timeout=timeout, creationflags=_NO_WINDOW)
+        argv = self._argv(args)
+        _log.info("Command: %r", argv)
+        try:
+            p = subprocess.run(argv, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace",
+                               timeout=timeout, creationflags=_NO_WINDOW)
+        except Exception:
+            _log.exception("ADB command failed: %r", argv)
+            raise
+        _log.info("Exit %s; stdout=%s; stderr=%s", p.returncode, p.stdout.strip(), p.stderr.strip())
         return p.returncode, p.stdout.strip(), p.stderr.strip()
 
     def shell(self, cmd, root=True, timeout=30):
@@ -78,8 +89,11 @@ class Device:
         adb = adb or shutil.which("adb")
         if not adb:
             return []
+        _log.info("Command: %r", [adb, "devices"])
         p = subprocess.run([adb, "devices"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace",
                            timeout=15, creationflags=_NO_WINDOW)
+        _log.info("Exit %s; stdout=%s; stderr=%s", p.returncode, p.stdout.strip(), p.stderr.strip())
         out = []
         for line in p.stdout.splitlines()[1:]:
             parts = line.split()
@@ -165,3 +179,105 @@ class Device:
 
     def remove_forward(self, port=STREAM_PORT):
         self._run(["forward", "--remove", f"tcp:{port}"])
+
+
+class DeviceLogs:
+    """One reconnecting logcat reader, kept alive across Start/Stop on one device."""
+
+    def __init__(self):
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._proc = None
+        self._thread = None
+        self._key = None
+        self._ready = threading.Event()
+
+    def start(self, device):
+        key = (device.adb, device.serial)
+        if self._key == key and self._thread and self._thread.is_alive():
+            return
+        self.stop()
+        self._key = key
+        self._stop.clear()
+        self._ready.clear()
+        argv = device._argv(["logcat", "-b", "all", "-v", "threadtime", "*:V"])
+        self._thread = threading.Thread(target=self._capture, args=(argv, key), daemon=True)
+        self._thread.start()
+        if not self._ready.wait(timeout=5):
+            _log.warning("Logcat reader has not started within five seconds")
+
+    def _capture(self, argv, key):
+        device_log = logging.getLogger("recam.device")
+        payload_log = logging.getLogger("recam.payload")
+
+        def record(raw):
+            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            device_log.info("[%s] %s", key[1], line)
+            # Preserve camera/feeder messages separately from noisy system output.
+            if any(tag in line for tag in ("ReCam", "recam", "KittyMemoryEx", "UBWC", "C2D", "qdMetaData")):
+                payload_log.info("[%s] %s", key[1], line)
+
+        while not self._stop.is_set():
+            proc = None
+            try:
+                with self._lock:
+                    if self._stop.is_set():
+                        break
+                    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                            creationflags=_NO_WINDOW)
+                    self._proc = proc
+                self._ready.set()
+                _log.info("Logcat connected: %s", key[1])
+                device_log.info("Logcat capture/reconnect: %s (includes retained device history)", key[1])
+                pending = b""
+                while True:
+                    chunk = proc.stdout.read1(65536)
+                    if not chunk:
+                        break
+                    pending += chunk
+                    while b"\n" in pending:
+                        line, pending = pending.split(b"\n", 1)
+                        record(line)
+                    if len(pending) >= 65536:
+                        record(pending)
+                        pending = b""
+                if pending:
+                    record(pending)
+                _log.info("Logcat exited: device=%s rc=%s", key[1], proc.wait())
+            except Exception:
+                self._ready.set()
+                _log.exception("Logcat capture failed: %s", key[1])
+            finally:
+                if proc:
+                    self._terminate(proc)
+                    proc.stdout.close()
+                with self._lock:
+                    if self._proc is proc:
+                        self._proc = None
+            if self._stop.wait(2):
+                break
+
+    @staticmethod
+    def _terminate(proc):
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=2)
+            except ProcessLookupError:
+                pass
+
+    def stop(self):
+        self._stop.set()
+        with self._lock:
+            proc = self._proc
+        if proc:
+            self._terminate(proc)
+        if self._thread:
+            self._thread.join(timeout=5)
+            if self._thread.is_alive():
+                raise DeviceError("Logcat reader did not stop")
+        self._thread = None
+        self._key = None

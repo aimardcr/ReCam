@@ -11,6 +11,7 @@
 #include "inlinehook.hpp"
 #include "bufferlock.hpp"
 #include "qcom_ubwc.hpp"
+#include "qcom_layout.hpp"
 #include "framesource.hpp"
 #include "shmsource.hpp"
 
@@ -283,9 +284,9 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
                     const uint64_t count = __atomic_add_fetch(&g_substituted, 1, __ATOMIC_RELAXED);
                     if (used == g_bars && diagnostics)
                         __atomic_add_fetch(&diagnostics->fallbackFrames, 1, __ATOMIC_RELAXED);
-                    if (log_stream(thiz, used->name(), aw, ah, afmt, &t))
+                    if (log_stream(thiz, used->name(), aw, ah, afmt, &t)) {
                         LOGI("sub %llu [%s] stream=%p %dx%d %s via %s | Y rs=%d ps=%d | "
-                             "Cb rs=%d ps=%d | Cr rs=%d ps=%d | Cb-Cr=%lld",
+                             "Cb rs=%d ps=%d | Cr rs=%d ps=%d | Cb-Cr=%lld | Cb-Y=%lld Cr-Y=%lld",
                              static_cast<unsigned long long>(count),
                              used->name(), thiz, aw, ah, fmt_name(afmt),
                              usedMapper ? "mapper" : "lockPlanes",
@@ -293,7 +294,18 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
                              t.cb.rowStride, t.cb.pixelStride,
                              t.cr.rowStride, t.cr.pixelStride,
                              static_cast<long long>(reinterpret_cast<intptr_t>(t.cb.data) -
-                                                    reinterpret_cast<intptr_t>(t.cr.data)));
+                                                    reinterpret_cast<intptr_t>(t.cr.data)),
+                             static_cast<long long>(reinterpret_cast<intptr_t>(t.cb.data) -
+                                                    reinterpret_cast<intptr_t>(t.y.data)),
+                             static_cast<long long>(reinterpret_cast<intptr_t>(t.cr.data) -
+                                                    reinterpret_cast<intptr_t>(t.y.data)));
+                        qcom::Handle handle;
+                        if (qcom::read_handle(*sb.buffer, handle))
+                            LOGI("QCOM capture layout: stream=%p format=0x%x flags=0x%x "
+                                 "aligned=%dx%d requested=%dx%d size=%u",
+                                 thiz, handle.format, handle.flags, handle.width, handle.height,
+                                 handle.requestedWidth, handle.requestedHeight, handle.size);
+                    }
                 } else if (!skip) {
                     skip = "source declined";
                 }
