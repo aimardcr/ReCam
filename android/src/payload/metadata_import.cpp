@@ -55,7 +55,10 @@ struct Image {
     }
 };
 
-bool find_slot(const Image& image, uintptr_t*& slot) {
+bool find_slot(const Image& image, uintptr_t*& slot,
+               const char* wanted = "find_camera_metadata_ro_entry") {
+    const size_t wantedSize = strlen(wanted) + 1;
+    if (wantedSize < 2 || wantedSize > 128) return false;
     const Elf64_Dyn* dynamic = nullptr;
     size_t count = 0;
     for (size_t i = 0; i < image.count; ++i) {
@@ -110,9 +113,8 @@ bool find_slot(const Image& image, uintptr_t*& slot) {
             const auto* symbol = reinterpret_cast<const Elf64_Sym*>(symbolAddress);
             if (symbol->st_name >= stringBytes) return false;
             const char* name = reinterpret_cast<const char*>(strings + symbol->st_name);
-            constexpr char wanted[] = "find_camera_metadata_ro_entry";
-            if (stringBytes - symbol->st_name < sizeof(wanted) ||
-                memcmp(name, wanted, sizeof(wanted)) != 0) continue;
+            if (stringBytes - symbol->st_name < wantedSize ||
+                memcmp(name, wanted, wantedSize) != 0) continue;
             const auto candidate = image.pointer(r.r_offset, sizeof(uintptr_t));
             if (!candidate || candidate % alignof(uintptr_t) || r.r_addend) return false;
             if (slot && reinterpret_cast<uintptr_t>(slot) != candidate) return false;
@@ -145,7 +147,8 @@ bool exchange_slot(MetadataImport& hook, uintptr_t expected, uintptr_t replaceme
 
 } // namespace
 
-bool metadata_import_install(uintptr_t cameraFunction, uintptr_t replacement, MetadataImport& hook) {
+bool metadata_import_install(uintptr_t cameraFunction, uintptr_t replacement, MetadataImport& hook,
+                             const char* name) {
     if (hook.installed) return true;
     Dl_info info{};
     if (!dladdr(reinterpret_cast<void*>(cameraFunction), &info) || !info.dli_fbase ||
@@ -157,8 +160,8 @@ bool metadata_import_install(uintptr_t cameraFunction, uintptr_t replacement, Me
         !eh->e_phnum || eh->e_phnum > 128 || eh->e_phoff > 4096) return false;
     Image image{base, reinterpret_cast<const Elf64_Phdr*>(base + eh->e_phoff), eh->e_phnum};
     uintptr_t* slot = nullptr;
-    if (!find_slot(image, slot)) return false;
-    const auto original = reinterpret_cast<uintptr_t>(dlsym(RTLD_DEFAULT, "find_camera_metadata_ro_entry"));
+    if (!find_slot(image, slot, name)) return false;
+    const auto original = reinterpret_cast<uintptr_t>(dlsym(RTLD_DEFAULT, name));
     if (!original || __atomic_load_n(slot, __ATOMIC_SEQ_CST) != original) return false;
     const long pageSize = sysconf(_SC_PAGESIZE);
     if (pageSize <= 0 || (pageSize & (pageSize - 1))) return false;

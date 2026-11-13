@@ -26,7 +26,15 @@ using Find = int (*)(const void*, uint32_t, void*);
 using Count = size_t (*)(const void*);
 using Get = int (*)(const void*, size_t, Entry*);
 using Name = const char* (*)(uint32_t, const void*);
-MetadataImport g_import;
+using VendorName = const char* (*)(uint32_t, uint64_t);
+using GetVendor = uint64_t (*)(const void*);
+using SetVendor = void (*)(void*, uint64_t);
+MetadataImport g_import, g_vendorImport;
+VendorName g_vendorSection = nullptr, g_vendorName = nullptr;
+GetVendor g_getVendor = nullptr;
+constexpr uint64_t kUnknownVendor = UINT64_MAX;
+uint64_t g_vendor = kUnknownVendor;
+bool g_vendorConflict = false;
 Count g_count = nullptr;
 Get g_get = nullptr;
 Name g_section = nullptr, g_name = nullptr;
@@ -50,6 +58,15 @@ void observe_metadata(const void* metadata, int64_t timestamp) {
     if (timestamp <= 0) return;
     const size_t count = g_count(metadata);
     if (!count || count > 4096) return;
+    // HAL metadata reaches this callback before insertResultLocked assigns the
+    // provider ID. Learn that ID from earlier queued results without modifying
+    // the HAL packet. Multiple providers disable this fallback.
+    uint64_t vendor = g_getVendor ? g_getVendor(metadata) : kUnknownVendor;
+    const bool fallback = vendor == kUnknownVendor;
+    if (fallback) {
+        RingWrite guard(&g_access);
+        if (guard && !g_vendorConflict) vendor = g_vendor;
+    }
     Record record{};
     record.timestamp = timestamp;
     bool input = false, output = false;
@@ -57,9 +74,11 @@ void observe_metadata(const void* metadata, int64_t timestamp) {
         Entry entry{};
         if (g_get(metadata, i, &entry) || !(entry.tag & 0x80000000u) ||
             entry.type != 1 || entry.count != 4 || !entry.data) continue;
-        const char* section = g_section(entry.tag, metadata);
+        const char* section = vendor != kUnknownVendor && g_vendorSection
+            ? g_vendorSection(entry.tag, vendor) : g_section(entry.tag, metadata);
         if (!section || strcmp(section, "com.oplus")) continue;
-        const char* name = g_name(entry.tag, metadata);
+        const char* name = vendor != kUnknownVendor && g_vendorName
+            ? g_vendorName(entry.tag, vendor) : g_name(entry.tag, metadata);
         if (!name) continue;
         if (!strcmp(name, "upscale.input.size")) {
             if (input) return;
@@ -74,6 +93,7 @@ void observe_metadata(const void* metadata, int64_t timestamp) {
     if (!input || !output || !record.input.valid() || !record.output.valid()) return;
     RingWrite guard(&g_access);
     if (!guard) return;
+    if (fallback && (g_vendorConflict || vendor != g_vendor)) return;
     for (auto& saved : g_records) {
         if (saved.timestamp != timestamp) continue;
         if (memcmp(&saved.input, &record.input, sizeof(Geometry)) ||
@@ -85,7 +105,7 @@ void observe_metadata(const void* metadata, int64_t timestamp) {
 
 } // namespace
 
-bool capture_layout_install(uintptr_t cameraFunction, uintptr_t replacement) {
+bool capture_layout_install(uintptr_t cameraFunction, uintptr_t replacement, uintptr_t vendorSetter) {
     char manufacturer[PROP_VALUE_MAX]{};
     __system_property_get("ro.product.manufacturer", manufacturer);
     if (strcmp(manufacturer, "OnePlus")) return false;
@@ -93,6 +113,11 @@ bool capture_layout_install(uintptr_t cameraFunction, uintptr_t replacement) {
     if (!g_get) g_get = reinterpret_cast<Get>(dlsym(RTLD_DEFAULT, "get_camera_metadata_ro_entry"));
     if (!g_section) g_section = reinterpret_cast<Name>(dlsym(RTLD_DEFAULT, "get_local_camera_metadata_section_name"));
     if (!g_name) g_name = reinterpret_cast<Name>(dlsym(RTLD_DEFAULT, "get_local_camera_metadata_tag_name"));
+    if (!g_getVendor) g_getVendor = reinterpret_cast<GetVendor>(dlsym(RTLD_DEFAULT, "get_camera_metadata_vendor_id"));
+    if (!g_vendorSection) g_vendorSection = reinterpret_cast<VendorName>(
+        dlsym(RTLD_DEFAULT, "get_local_camera_metadata_section_name_vendor_id"));
+    if (!g_vendorName) g_vendorName = reinterpret_cast<VendorName>(
+        dlsym(RTLD_DEFAULT, "get_local_camera_metadata_tag_name_vendor_id"));
     if (!g_count || !g_get || !g_section || !g_name) {
         __android_log_print(ANDROID_LOG_WARN, "ReCam", "capture layout: metadata API unavailable");
         return false;
@@ -102,15 +127,43 @@ bool capture_layout_install(uintptr_t cameraFunction, uintptr_t replacement) {
         if (!guard) return false;
         for (auto& r : g_records) r = {};
         g_next = 0;
+        g_vendor = kUnknownVendor;
+        g_vendorConflict = false;
     }
+    if (g_getVendor && g_vendorSection && g_vendorName)
+        metadata_import_install(cameraFunction, vendorSetter, g_vendorImport,
+                                "set_camera_metadata_vendor_id");
     const bool ok = metadata_import_install(cameraFunction, replacement, g_import);
     __android_log_print(ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, "ReCam",
-        "capture layout: per-frame Oplus metadata observer %s", ok ? "installed" : "unavailable");
+        "capture layout: per-frame Oplus metadata observer %s; provider identity %s",
+        ok ? "installed" : "unavailable", g_vendorImport.installed ? "enabled" : "unavailable");
     return ok;
 }
 
-bool capture_layout_remove() { return metadata_import_remove(g_import); }
-bool capture_layout_installed() { return g_import.installed; }
+bool capture_layout_remove() {
+    const bool query = metadata_import_remove(g_import);
+    const bool vendor = metadata_import_remove(g_vendorImport);
+    return query && vendor;
+}
+uint32_t capture_layout_hook_count() {
+    return (g_import.installed ? 1u : 0u) + (g_vendorImport.installed ? 1u : 0u);
+}
+
+void capture_layout_set_vendor(void* metadata, uint64_t vendor, bool observe) {
+    const auto original = reinterpret_cast<SetVendor>(
+        __atomic_load_n(&g_vendorImport.original, __ATOMIC_ACQUIRE));
+    if (!original) return;
+    original(metadata, vendor);
+    if (!observe || !metadata || vendor == kUnknownVendor) return;
+    RingWrite guard(&g_access);
+    if (!guard) return;
+    if (g_vendor == kUnknownVendor) g_vendor = vendor;
+    else if (g_vendor != vendor && !g_vendorConflict) {
+        g_vendorConflict = true;
+        for (auto& record : g_records) record = {};
+        g_next = 0;
+    }
+}
 
 int capture_layout_query(const void* metadata, uint32_t tag, void* entry, bool observe) {
     auto original = reinterpret_cast<Find>(__atomic_load_n(&g_import.original, __ATOMIC_ACQUIRE));

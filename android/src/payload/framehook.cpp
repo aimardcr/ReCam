@@ -177,6 +177,12 @@ const char* fmt_name(int32_t f)
     }
 }
 
+extern "C" void recam_set_vendor(void* metadata, uint64_t vendor)
+{
+    CallbackScope scope;
+    capture_layout_set_vendor(metadata, vendor, scope.substitute);
+}
+
 extern "C" int recam_find_metadata(const void* metadata, uint32_t tag, void* entry)
 {
     CallbackScope scope;
@@ -400,7 +406,8 @@ bool framehook_install(uintptr_t target)
         g_bars = colorbars_source();
     }
     qcom_ubwc_retry_initialization();
-    capture_layout_install(target, reinterpret_cast<uintptr_t>(&recam_find_metadata));
+    capture_layout_install(target, reinterpret_cast<uintptr_t>(&recam_find_metadata),
+                           reinterpret_cast<uintptr_t>(&recam_set_vendor));
     __atomic_store_n(&g_lifecycle, Running, __ATOMIC_SEQ_CST);
     __atomic_store_n(&g_enabled, 1, __ATOMIC_SEQ_CST);
     LOGI("framehook: sources = %s + %s",
@@ -413,7 +420,7 @@ bool framehook_install(uintptr_t target)
 
 uint32_t framehook_count()
 {
-    return (g_hook.installed ? 1u : 0u) + (capture_layout_installed() ? 1u : 0u);
+    return (g_hook.installed ? 1u : 0u) + capture_layout_hook_count();
 }
 
 bool framehook_remove()

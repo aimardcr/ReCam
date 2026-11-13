@@ -14,7 +14,7 @@ struct MetadataImport {
 };
 
 bool metadata_import_install(uintptr_t cameraFunction, uintptr_t replacement,
-                             MetadataImport& hook);
+                             MetadataImport& hook, const char* name = "find_camera_metadata_ro_entry");
 bool metadata_import_remove(MetadataImport& hook);
 
 } // namespace recam
