@@ -310,7 +310,7 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
             LOGE("recam_init: cleanup failed; ownership retained for shutdown retry");
         return -1;
     }
-    c->hooks_installed = 1;
+    c->hooks_installed = recam::framehook_count();
 
     // Only this extension advertises reuse; older v2 payloads leave it zero.
     auto* resident = reinterpret_cast<recam::ResidentPayload*>(

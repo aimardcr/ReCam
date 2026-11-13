@@ -39,6 +39,8 @@ LOCAL_SRC_FILES := \
     src/payload/framehook.cpp \
     src/payload/bufferlock.cpp \
     src/payload/qcom_ubwc.cpp \
+    src/payload/capture_layout.cpp \
+    src/payload/metadata_import.cpp \
     src/payload/colorbars.cpp \
     src/payload/shmsource.cpp \
     src/payload/cxx_runtime.cpp \

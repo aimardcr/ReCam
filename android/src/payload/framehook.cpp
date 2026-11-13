@@ -10,6 +10,7 @@
 #include "framehook.hpp"
 #include "inlinehook.hpp"
 #include "bufferlock.hpp"
+#include "capture_layout.hpp"
 #include "qcom_ubwc.hpp"
 #include "qcom_layout.hpp"
 #include "framesource.hpp"
@@ -176,6 +177,12 @@ const char* fmt_name(int32_t f)
     }
 }
 
+extern "C" int recam_find_metadata(const void* metadata, uint32_t tag, void* entry)
+{
+    CallbackScope scope;
+    return capture_layout_query(metadata, tag, entry, scope.substitute);
+}
+
 // --- the hook --------------------------------------------------------------------
 
 extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
@@ -262,6 +269,14 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
                 t.y  = { lb.plane[0].data, lb.plane[0].rowStride, lb.plane[0].pixelStride };
                 t.cb = { lb.plane[1].data, lb.plane[1].rowStride, lb.plane[1].pixelStride };
                 t.cr = { lb.plane[2].data, lb.plane[2].rowStride, lb.plane[2].pixelStride };
+
+                if (capture_layout_apply(a2, *sb.buffer, t) &&
+                    log_stream(thiz, "Oplus capture geometry", t.width, t.height, afmt, &t))
+                    LOGI("capture layout: timestamp=%lld allocation=%dx%d input=%dx%d "
+                         "stride=%d chroma-offset=%llu", static_cast<long long>(a2), aw, ah,
+                         t.width, t.height, t.y.rowStride,
+                         static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(t.cr.data) -
+                                                         reinterpret_cast<uintptr_t>(t.y.data)));
 
                 // Bars are the fallback, so an un-fed hook is still visibly live.
                 FrameSource* used = nullptr;
@@ -385,6 +400,7 @@ bool framehook_install(uintptr_t target)
         g_bars = colorbars_source();
     }
     qcom_ubwc_retry_initialization();
+    capture_layout_install(target, reinterpret_cast<uintptr_t>(&recam_find_metadata));
     __atomic_store_n(&g_lifecycle, Running, __ATOMIC_SEQ_CST);
     __atomic_store_n(&g_enabled, 1, __ATOMIC_SEQ_CST);
     LOGI("framehook: sources = %s + %s",
@@ -395,8 +411,17 @@ bool framehook_install(uintptr_t target)
     return true;
 }
 
+uint32_t framehook_count()
+{
+    return (g_hook.installed ? 1u : 0u) + (capture_layout_installed() ? 1u : 0u);
+}
+
 bool framehook_remove()
 {
+    if (!capture_layout_remove()) {
+        LOGE("framehook: metadata import removal failed");
+        return false;
+    }
     // Failed initialization never exposed a callback/trampoline. Reclaim its
     // ring synchronously and leave this image eligible for an initialization retry.
     if (!g_hook.installed && !g_orig) {
