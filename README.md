@@ -21,7 +21,7 @@ separate feeder process, with four shared-memory lanes for different stream size
 Camera timestamps and capture metadata are preserved.
 
 Live sources use H.264 in FLV over a forwarded TCP connection. Video files decode
-and loop on the device. Qualcomm UBWC buffers use C2D conversion where supported.
+and loop on the device.
 **Stop** removes the hooks and restores the real camera.
 
 ## Requirements and downloads
@@ -44,9 +44,8 @@ binaries. macOS builds are not notarized. `SHA256SUMS.txt` contains download che
 
 Compatibility depends on the device firmware, camera app, and buffer format.
 Preview, saved photos, and recordings can use different paths. Unsupported formats,
-including direct JPEG/BLOB and RAW outputs, pass through unchanged. The OnePlus
-capture-queue workaround is restricted to the matching OxygenOS
-`LE2115_13.1.0.592(EX01)` camera-service build. x86_64 is intended for emulator use.
+including direct JPEG/BLOB and RAW outputs, pass through unchanged.
+x86_64 is intended for emulator use.
 
 ## Using the desktop app
 
@@ -149,6 +148,8 @@ existing device binaries, or `--no-freeze` to stage them without building the ap
 The **Release build** GitHub Actions workflow builds all listed platforms. It
 checks executable architectures and bundled payload hashes, then produces separate
 archives, build metadata, and checksums in the `release-assets` artifact.
+To share downloads without a GitHub sign-in, use an `-rc.N` version and enable
+**Publish a public test release**. This creates a public prerelease.
 
 ## Components
 
