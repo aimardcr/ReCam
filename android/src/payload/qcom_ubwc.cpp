@@ -416,12 +416,12 @@ FrameSource* qcom_ubwc_fill(const void* native, int w, int h, int fence,
     if (!cpu_sync(g_compressed.fd, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ)) {
         munmap(target, l.bytes); return nullptr;
     }
-    if (!cpu_sync(handle.fd, DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE)) {
+    if (!cpu_sync(handle.fd, DMA_BUF_SYNC_START | DMA_BUF_SYNC_RW)) {
         cpu_sync(g_compressed.fd, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
         munmap(target, l.bytes); return nullptr;
     }
     memcpy(target, g_compressed.cpu, l.bytes);
-    const bool flushed = cpu_sync(handle.fd, DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE);
+    const bool flushed = cpu_sync(handle.fd, DMA_BUF_SYNC_END | DMA_BUF_SYNC_RW);
     const bool released = cpu_sync(g_compressed.fd, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
     munmap(target, l.bytes);
     if (!flushed || !released) {
