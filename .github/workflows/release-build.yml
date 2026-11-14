@@ -5,10 +5,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version (vMAJOR.MINOR.PATCH)
+        description: Version (vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N)
         required: true
-        default: v0.1.3
+        default: v0.1.4
         type: string
+      publish_prerelease:
+        description: Publish a public test release (requires an -rc.N version)
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -135,3 +140,45 @@ jobs:
           name: release-assets
           path: release/
           if-no-files-found: error
+
+  publish-prerelease:
+    if: ${{ inputs.publish_prerelease }}
+    needs: assemble
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: release
+      - name: Publish public test downloads
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "Public test releases require an -rc.N version."
+            exit 1
+          fi
+          existing_tag="$(git ls-remote --tags origin "refs/tags/$RELEASE_VERSION")"
+          if [ -n "$existing_tag" ]; then
+            echo "Tag already exists; choose a new candidate version."
+            exit 1
+          fi
+          (cd release && sha256sum --check SHA256SUMS.txt)
+          cat > release-notes.md <<EOF
+          Test build from commit $GITHUB_SHA.
+
+          Separate downloads are provided for each platform. Update both Android binaries together.
+          Reproduce the problem and attach the desktop, device, and payload session logs to your issue.
+
+          This is a prerelease for testing; the latest stable release is unchanged.
+          EOF
+          gh release create "$RELEASE_VERSION" release/* \
+            --target "$GITHUB_SHA" --title "ReCam $RELEASE_VERSION (test build)" \
+            --prerelease --latest=false --notes-file release-notes.md
+          echo "Public downloads: https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_VERSION" >> "$GITHUB_STEP_SUMMARY"

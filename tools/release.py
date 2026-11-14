@@ -149,8 +149,8 @@ def main():
     parser.add_argument("--target", choices=TARGETS)
     parser.add_argument("--output", type=Path, default=ROOT / "release")
     args = parser.parse_args()
-    if not re.fullmatch(r"v\d+\.\d+\.\d+", args.version):
-        parser.error("version must be vMAJOR.MINOR.PATCH")
+    if not re.fullmatch(r"v\d+\.\d+\.\d+(?:-rc\.\d+)?", args.version):
+        parser.error("version must be vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N")
     args.output.mkdir(parents=True, exist_ok=True)
     if args.kind == "android": android(args.version, args.output)
     elif args.kind == "checksums": checksums(args.version, args.output)
