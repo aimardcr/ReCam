@@ -76,17 +76,22 @@ public:
 
     inline bool testSyscall()
     {
-        _kMgr->trace.callSyscall(0);
-        return rgetpid() == _kMgr->processID();
+        const int pid = rgetpid();
+        if (pid == _kMgr->processID()) return true;
+        if (pid >= 0) _lastError = "remote getpid returned an unexpected PID";
+        return false;
     }
 
     inline int rgetpid()
     {
-        int ret = _kMgr->trace.callSyscall(syscall_getpid_n).result.val;
-        if (ret < 0)
+        const auto call = _kMgr->trace.callSyscall(syscall_getpid_n);
+        if (call.status != KT_RP_CALL_SUCCESS)
         {
-            _lastError = strerror(-ret);
+            _lastError = "remote getpid failed with trace status " + std::to_string(call.status);
+            return -1;
         }
+        const int ret = static_cast<int>(call.result.val);
+        _lastError = ret < 0 ? strerror(-ret) : "";
         return ret;
     }
 

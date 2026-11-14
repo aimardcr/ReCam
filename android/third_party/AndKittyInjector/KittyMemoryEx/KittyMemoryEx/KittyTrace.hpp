@@ -305,7 +305,7 @@ public:
      * @brief Wait for the process to enter or exit a syscall.
      * @return True if the wait was successful, false otherwise.
      */
-    bool waitSyscall() const;
+    bool waitSyscall();
 
     /**
      * @brief Single-step the process.

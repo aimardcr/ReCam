@@ -171,6 +171,16 @@ bool attach(KittyMemoryMgr& kmgr, pid_t pid, int sdk, int timeoutMs, bool* seize
 
 void release(KittyMemoryMgr& kmgr, pid_t pid)
 {
+    // Remote-call recovery must leave the borrowed thread stopped before TLS
+    // restoration or detach. Do not advertise a resume after failed cleanup.
+    if (kmgr.trace.isAttached()) {
+        user_regs_struct regs{};
+        if (!kmgr.trace.getRegs(&regs) && !kmgr.trace.stop()) {
+            KITTY_LOGE("Cannot stop target %d for cleanup.", pid);
+            if (errnoOwner == &kmgr) { errnoOwner = nullptr; savedErrnoAddress = 0; }
+            return;
+        }
+    }
     if (errnoOwner == &kmgr) {
         int current = 0;
         kmgr.readMem(savedErrnoAddress, &current, sizeof(current));
@@ -185,7 +195,10 @@ void release(KittyMemoryMgr& kmgr, pid_t pid)
         if (!kmgr.trace.waitSyscall())
             KITTY_LOGW("waitSyscall before detach failed; detaching anyway.");
     }
-    kmgr.trace.detach();
+    if (!kmgr.trace.detach()) {
+        KITTY_LOGE("Target %d could not be detached.", pid);
+        return;
+    }
     // Non-main threads stay SIGSTOPped until this runs.
     if (kill(pid, SIGCONT) == -1)
         KITTY_LOGE("Failed to SIGCONT %d: %s", pid, strerror(errno));

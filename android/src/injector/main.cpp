@@ -360,8 +360,6 @@ int recam::cli::inject()
     cfg.memfd   = (route == Route::Memfd);
     cfg.timeout = kRemoteCallTimeoutMs;
 
-    // KittyInjector::init() probes memfd; probing twice perturbs its result.
-
     KittyMemoryMgr kmgr{};
     bool seized = false;
     if (!tgt::attach(kmgr, pid, sdk, cfg.timeout, &seized))
@@ -436,7 +434,7 @@ int recam::cli::inject()
                route == Route::Memfd ? "memfd" : "relabelled file path");
     inject_elf_info_t info = injector.inject(libPath);
     if (!info.is_valid()) {
-        KITTY_LOGE("Injection failed. Target NOT killed; resuming it.");
+        KITTY_LOGE("Injection failed; restoring the target and detaching.");
         tgt::release(kmgr, pid);
         return 1;
     }

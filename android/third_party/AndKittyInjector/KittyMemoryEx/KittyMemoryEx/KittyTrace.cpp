@@ -1,5 +1,16 @@
 #include "KittyTrace.hpp"
 
+#include <chrono>
+
+namespace {
+using TraceClock = std::chrono::steady_clock;
+int remaining_ms(TraceClock::time_point deadline)
+{
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - TraceClock::now()).count();
+    return ms > 0 ? static_cast<int>(ms) : 0;
+}
+}
+
 bool KittyTraceMgr::attach(int options)
 {
     if (_pid <= 0)
@@ -20,8 +31,10 @@ bool KittyTraceMgr::attach(int options)
 
     _seized = false;
 
-    int status;
-    if (waitpid(_pid, &status, 0) != _pid || !WIFSTOPPED(status))
+    int status = 0;
+    pid_t waited;
+    do { waited = waitpid(_pid, &status, __WALL); } while (waited < 0 && errno == EINTR);
+    if (waited != _pid || !WIFSTOPPED(status))
     {
         KITTY_LOGE("Error occurred while waiting for pid %d to stop. \"%s\".", _pid, strerror(errno));
         ptrace(PTRACE_DETACH, _pid, nullptr, nullptr);
@@ -30,8 +43,11 @@ bool KittyTraceMgr::attach(int options)
 
     _attached = true;
 
-    if (options != 0)
-        setOptions(options);
+    if (options != 0 && !setOptions(options))
+    {
+        detach();
+        return false;
+    }
 
     return true;
 }
@@ -74,32 +90,18 @@ bool KittyTraceMgr::setOptions(int options)
 
 bool KittyTraceMgr::detach()
 {
-    _attached = false;
-
     if (!isAttached())
-        return true;
-
-    while (true)
     {
-        int status = 0;
-        if (waitpid(_pid, &status, __WALL | WNOHANG) <= 0)
-            break;
+        _attached = false;
+        return true;
     }
-
     errno = 0;
     if (ptrace(PTRACE_DETACH, _pid, nullptr, nullptr) == -1L)
     {
         KITTY_LOGE("PTRACE_DETACH failed for pid %d. \"%s\".", _pid, strerror(errno));
         return false;
     }
-
-    while (true)
-    {
-        int status = 0;
-        if (waitpid(_pid, &status, __WALL | WNOHANG) <= 0)
-            break;
-    }
-
+    _attached = false;
     return true;
 }
 
@@ -127,8 +129,8 @@ bool KittyTraceMgr::stop()
         }
     }
 
-    int status;
-    if (waitpid(_pid, &status, 0) != _pid || !WIFSTOPPED(status))
+    int status = 0;
+    if (wait(&status, 0, _remoteCallTimeout > 0 ? _remoteCallTimeout : 5000) != _pid || !WIFSTOPPED(status))
     {
         KITTY_LOGE("Error occurred while waiting for pid %d to stop. \"%s\".", _pid, strerror(errno));
         return false;
@@ -154,48 +156,58 @@ bool KittyTraceMgr::cont(int sig)
 
 pid_t KittyTraceMgr::wait(int *status, int options, int timeout_ms) const
 {
-    if (!_attached)
-        return -1;
-
-    if (timeout_ms <= 0)
-        return waitpid(_pid, status, options);
-
-    int elapsed = 0;
-    pid_t res;
-    if (!(options & WNOHANG))
-        options |= WNOHANG;
-
-    while (elapsed < timeout_ms)
+    if (!_attached || !status)
     {
-        res = waitpid(_pid, status, options);
-        if (res != 0)
-            return res;
-
-        usleep(25000);
-        elapsed += 25;
+        errno = EINVAL;
+        return -1;
     }
 
-    return res;
+    const auto deadline = TraceClock::now() + std::chrono::milliseconds(timeout_ms);
+    for (;;)
+    {
+        const pid_t res = waitpid(_pid, status, options | __WALL | (timeout_ms > 0 ? WNOHANG : 0));
+        if (res > 0 || (res < 0 && errno != EINTR)) return res;
+        if (res == 0 && timeout_ms <= 0) return 0;
+        if (timeout_ms > 0)
+        {
+            const int left = remaining_ms(deadline);
+            if (!left) return 0;
+            if (res == 0) usleep(static_cast<useconds_t>(std::min(left, 5)) * 1000);
+        }
+    }
 }
 
-bool KittyTraceMgr::waitSyscall() const
+bool KittyTraceMgr::waitSyscall()
 {
-    if (!_attached || _pid <= 0)
-        return false;
-
-    errno = 0;
-    if (ptrace(PTRACE_SYSCALL, _pid, nullptr, nullptr) == -1L)
+    if (!_attached || _pid <= 0) return false;
+    const auto deadline = TraceClock::now() + std::chrono::milliseconds(
+        _remoteCallTimeout > 0 ? _remoteCallTimeout : 5000);
+    for (unsigned stops = 0; stops < 16; ++stops)
     {
-        KITTY_LOGE("PTRACE_SYSCALL failed for pid %d. \"%s\".", _pid, strerror(errno));
-        return false;
+        const int left = remaining_ms(deadline);
+        if (!left) return false; // still stopped
+        if (ptrace(PTRACE_SYSCALL, _pid, nullptr, nullptr) == -1L)
+        {
+            KITTY_LOGE("PTRACE_SYSCALL failed for pid %d. \"%s\".", _pid, strerror(errno));
+            return false;
+        }
+        int status = 0;
+        if (wait(&status, 0, left) != _pid)
+        {
+            stop();
+            return false;
+        }
+        if (WIFEXITED(status) || WIFSIGNALED(status))
+        {
+            _attached = false;
+            return false;
+        }
+        if (!WIFSTOPPED(status)) return false;
+        if (WSTOPSIG(status) == (SIGTRAP | 0x80) && (status >> 16) == 0) return true;
+        if (WSTOPSIG(status) != SIGCHLD && WSTOPSIG(status) != SIGSTOP &&
+            WSTOPSIG(status) != SIGTSTP) return false;
     }
-
-    int status = 0;
-    waitpid(_pid, &status, 0);
-    if (!WIFSTOPPED(status))
-        return false;
-
-    return true;
+    return false;
 }
 
 bool KittyTraceMgr::step(int steps) const
@@ -374,7 +386,7 @@ size_t KittyTraceMgr::pokeMem(uintptr_t addr, const void *buf, size_t size) cons
 
 kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintptr_t functionAddress, int nargs, ...)
 {
-    if (!_attached || _pid <= 0 || functionAddress == 0)
+    if (!_attached || _pid <= 0 || functionAddress == 0 || nargs < 0 || nargs > 64)
         return {KT_RP_CALL_FAILED, {0}};
 
     user_regs_struct backup_regs, return_regs, tmp_regs;
@@ -391,9 +403,11 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
 
     memcpy(&tmp_regs, &backup_regs, sizeof(backup_regs));
 
-    KT_REGS_ALIGN_STACK(backup_regs);
+#if defined(__x86_64__)
+    // Preserve the interrupted function's red zone below its stack pointer.
+    tmp_regs.KT_REG_SP -= 128;
+#endif
     KT_REGS_ALIGN_STACK(tmp_regs);
-    KT_REGS_ALIGN_STACK(return_regs);
 
     KITTY_LOGD("callFunction(%p): Calling with %d args.", (void *)functionAddress, nargs);
 
@@ -409,30 +423,26 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
         va_end(vl);
     }
 
-    // cleanup failure return
+    bool running = false;
+    const auto deadline = TraceClock::now() + std::chrono::milliseconds(
+        _remoteCallTimeout > 0 ? _remoteCallTimeout : 5000);
+
+    // Restore only while ptrace owns a stopped thread.
     auto failure_return = [&](KT_RP_CALL_STATUS s = KT_RP_CALL_FAILED) -> kitty_rp_call_t {
         KITTY_LOGE("callFunction(%p): Failed.", (void *)functionAddress);
-        if (_autoRestoreRegs)
-            setRegs(&backup_regs);
+        if (running && !stop()) return {KT_RP_CALL_NOT_STOPPED, {0}};
+        running = false;
+        if (_autoRestoreRegs && !setRegs(&backup_regs))
+            s = KT_RP_CALL_REGS_FAILED;
         return {s, {0}};
     };
 
-    auto validate_ret = [this](const user_regs_struct &regs, uintptr_t return_addr) -> bool {
-        uintptr_t pc = regs.KT_REG_PC;
-        if (pc != return_addr)
-        {
+    auto validate_ret = [](const user_regs_struct &regs, uintptr_t return_addr) -> bool {
 #if defined(__arm__)
-            if (uintptr_t((intptr_t(pc) & ~1)) != uintptr_t((intptr_t(return_addr) & ~1)))
-#elif defined(__i386__) || defined(__x86_64__)
-            if (pc < return_addr || pc > (return_addr + 7))
+        return (regs.KT_REG_PC & ~uintptr_t(1)) == (return_addr & ~uintptr_t(1));
+#else
+        return regs.KT_REG_PC == return_addr;
 #endif
-            {
-                siginfo_t si = {};
-                getSignalInfo(&si);
-                return uintptr_t(si.si_addr) == return_addr;
-            }
-        }
-        return true;
     };
 
 #if defined(__arm__) || defined(__aarch64__)
@@ -451,7 +461,7 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
     if (nargs > KT_REG_ARGS_NUM)
     {
         KT_REGS_ALIGN_STACK_N(tmp_regs, sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM));
-        if (!pokeMem(tmp_regs.KT_REG_SP, &vargs[KT_REG_ARGS_NUM], sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM)))
+        if (pokeMem(tmp_regs.KT_REG_SP, &vargs[KT_REG_ARGS_NUM], sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM)) != sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM))
             return failure_return(KT_RP_CALL_MEM_FAILED);
     }
 
@@ -489,13 +499,13 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
     if (nargs > 0)
     {
         KT_REGS_ALIGN_STACK_N(tmp_regs, sizeof(uintptr_t) * nargs);
-        if (!pokeMem(tmp_regs.KT_REG_SP, &vargs[0], nargs * sizeof(uintptr_t)))
+        if (pokeMem(tmp_regs.KT_REG_SP, &vargs[0], nargs * sizeof(uintptr_t)) != nargs * sizeof(uintptr_t))
             return failure_return(KT_RP_CALL_MEM_FAILED);
     }
 
     // Push return address onto stack
     tmp_regs.KT_REG_SP -= sizeof(uintptr_t);
-    if (!pokeMem(tmp_regs.KT_REG_SP, &callerAddress, sizeof(uintptr_t)))
+    if (pokeMem(tmp_regs.KT_REG_SP, &callerAddress, sizeof(uintptr_t)) != sizeof(uintptr_t))
         return failure_return(KT_RP_CALL_MEM_FAILED);
 
     // Set function address to call
@@ -533,13 +543,13 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
     if (nargs > KT_REG_ARGS_NUM)
     {
         KT_REGS_ALIGN_STACK_N(tmp_regs, sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM));
-        if (!pokeMem(tmp_regs.KT_REG_SP, &vargs[KT_REG_ARGS_NUM], sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM)))
+        if (pokeMem(tmp_regs.KT_REG_SP, &vargs[KT_REG_ARGS_NUM], sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM)) != sizeof(uintptr_t) * (nargs - KT_REG_ARGS_NUM))
             return failure_return(KT_RP_CALL_MEM_FAILED);
     }
 
     // Push return address onto stack
     tmp_regs.KT_REG_SP -= sizeof(uintptr_t);
-    if (!pokeMem(tmp_regs.KT_REG_SP, &callerAddress, sizeof(uintptr_t)))
+    if (pokeMem(tmp_regs.KT_REG_SP, &callerAddress, sizeof(uintptr_t)) != sizeof(uintptr_t))
         return failure_return(KT_RP_CALL_MEM_FAILED);
 
     // Set function address to call
@@ -560,18 +570,19 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
     // Resume execution
     if (!cont())
         return failure_return(KT_RP_CALL_CONT_FAILED);
+    running = true;
 
     // Catch SIGSEGV caused by our code
     do
     {
         int status = 0;
         errno = 0;
-        pid_t wp = wait(&status, WUNTRACED, _remoteCallTimeout);
+        const int left = remaining_ms(deadline);
+        pid_t wp = left ? wait(&status, WUNTRACED, left) : 0;
         if (wp != _pid)
         {
             if (wp == 0)
             {
-                stop();
                 KITTY_LOGE("callFunction(%p): timedout!", (void *)functionAddress);
                 return failure_return(KT_RP_CALL_TIMEOUT);
             }
@@ -596,12 +607,14 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
 
         if (!WIFSTOPPED(status))
             continue;
+        running = false;
 
         if (WSTOPSIG(status) == SIGCHLD || WSTOPSIG(status) == SIGSTOP || WSTOPSIG(status) == SIGTSTP)
         {
             if (!cont())
                 return failure_return(KT_RP_CALL_CONT_FAILED);
 
+            running = true;
             continue;
         }
 
@@ -610,7 +623,8 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
 
         KITTY_LOGD("callFunction(%p): Ok.", (void *)functionAddress);
 
-        if (validate_ret(return_regs, callerAddress))
+        if (WSTOPSIG(status) == SIGSEGV && (status >> 16) == 0 &&
+            validate_ret(return_regs, callerAddress))
             break;
 
         KITTY_LOGE("callFunction(%p): Process didn't jump to specified return address (%p)",
@@ -649,17 +663,14 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
                        map.toString().c_str());
         }
 
-        if (!cont(WSTOPSIG(status)))
-            return failure_return(KT_RP_CALL_CONT_FAILED);
-
         return failure_return(KT_RP_CALL_MISMATCH_STOP);
     } while (true);
 
     kitty_rp_call_t result = {KT_RP_CALL_SUCCESS, {static_cast<intptr_t>(return_regs.KT_REG_RET)}};
 
     // Restore regs
-    if (_autoRestoreRegs)
-        setRegs(&backup_regs);
+    if (_autoRestoreRegs && !setRegs(&backup_regs))
+        return {KT_RP_CALL_REGS_FAILED, {0}};
 
     KITTY_LOGD("callFunction: Calling function %p returned %p.", (void *)functionAddress, (void *)result.result.ptr);
 
@@ -668,7 +679,7 @@ kitty_rp_call_t KittyTraceMgr::_callFunctionFrom(uintptr_t callerAddress, uintpt
 
 kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
 {
-    if (!_attached || _pid <= 0)
+    if (!_attached || _pid <= 0 || nargs < 0 || nargs > 6)
         return {KT_RP_CALL_FAILED, {0}};
 
     user_regs_struct backup_regs, return_regs, tmp_regs;
@@ -685,9 +696,7 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
 
     memcpy(&tmp_regs, &backup_regs, sizeof(backup_regs));
 
-    KT_REGS_ALIGN_STACK(backup_regs);
     KT_REGS_ALIGN_STACK(tmp_regs);
-    KT_REGS_ALIGN_STACK(return_regs);
 
     std::vector<uintptr_t> vargs(6, 0);
     if (nargs > 0)
@@ -738,31 +747,39 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
 #endif
 
         backup_code.resize(syscall_code.size(), 0);
-        if (!peekMem(target_pc_mem, backup_code.data(), backup_code.size()))
+        if (peekMem(target_pc_mem, backup_code.data(), backup_code.size()) != backup_code.size())
         {
             KITTY_LOGE("callSyscall(%d): Failed to backup PC(%p) memory code.", int(sysnr), (void *)target_pc_mem);
             return {KT_RP_CALL_MEM_FAILED, {0}};
         }
     }
 
-    // cleanup failure return
+    bool running = false;
+    const auto deadline = TraceClock::now() + std::chrono::milliseconds(
+        _remoteCallTimeout > 0 ? _remoteCallTimeout : 5000);
+
+    // Restore only while ptrace owns a stopped thread.
     auto failure_return = [&](KT_RP_CALL_STATUS s = KT_RP_CALL_FAILED) -> kitty_rp_call_t {
         KITTY_LOGE("callSyscall(%d): Failed.", int(sysnr));
 
-        if (_autoRestoreRegs)
-            setRegs(&backup_regs);
+        if (running && !stop()) return {KT_RP_CALL_NOT_STOPPED, {0}};
+        running = false;
+        if (_autoRestoreRegs && !setRegs(&backup_regs))
+            s = KT_RP_CALL_REGS_FAILED;
 
         if (_syscallGadget == 0)
         {
-            pokeMem(target_pc_mem, backup_code.data(), backup_code.size());
+            if (pokeMem(target_pc_mem, backup_code.data(), backup_code.size()) != backup_code.size())
+                s = KT_RP_CALL_MEM_FAILED;
         }
         return {s, {0}};
     };
 
 #if defined(__aarch64__)
-    // Clear Single-step (Bit 21) and Debug Exception (Bit 9)
-    // tmp_regs.pstate &= ~KT_CPSR_SS_MASK;
-    // tmp_regs.pstate &= ~KT_CPSR_D_MASK;
+    // A retained TIF_SINGLESTEP with SS clear traps before executing the SVC.
+    // Arm an active-not-pending step, including on kernels that do not repair SS.
+    tmp_regs.pstate |= KT_CPSR_SS_MASK;
+    tmp_regs.pstate &= ~KT_CPSR_D_MASK;
 
     // Clear BTYPE (Bits 10 & 11) to bypass BTI enforcement
     tmp_regs.pstate &= ~KT_CPSR_BTYPE_MASK;
@@ -814,12 +831,12 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
 
     if (_syscallGadget == 0)
     {
-        if (!pokeMem(target_pc_mem, syscall_code.data(), syscall_code.size()))
+        if (pokeMem(target_pc_mem, syscall_code.data(), syscall_code.size()) != syscall_code.size())
         {
             KITTY_LOGE("callSyscall(%d): Failed to write syscall code into PC(%p) memory.",
                        int(sysnr),
                        (void *)target_pc_mem);
-            return {KT_RP_CALL_MEM_FAILED, {0}};
+            return failure_return(KT_RP_CALL_MEM_FAILED);
         }
     }
 
@@ -830,15 +847,20 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
     // Single step to execute syscall
     if (!step())
         return failure_return(KT_RP_CALL_STEP_FAILED);
+    running = true;
 
-    // Wait for step
+    unsigned pendingSteps = 0;
+    unsigned otherStops = 0;
+    // Wait for the syscall instruction to complete.
     do
     {
         errno = 0;
         int status = 0;
-        pid_t wp = wait(&status, WUNTRACED);
+        const int left = remaining_ms(deadline);
+        pid_t wp = left ? wait(&status, WUNTRACED, left) : 0;
         if (wp != _pid)
         {
+            if (wp == 0) return failure_return(KT_RP_CALL_TIMEOUT);
             KITTY_LOGE("callSyscall(%d): waitpid returned %d. \"%s\".", int(sysnr), wp, strerror(errno));
             return failure_return(KT_RP_CALL_WAIT_FAILED);
         }
@@ -859,20 +881,59 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
 
         if (!WIFSTOPPED(status))
             continue;
-
-        if (WSTOPSIG(status) == SIGCHLD || WSTOPSIG(status) == SIGSTOP || WSTOPSIG(status) == SIGTSTP)
-        {
-            if (!cont())
-                return failure_return(KT_RP_CALL_CONT_FAILED);
-
-            continue;
-        }
+        running = false;
 
         if (!getRegs(&return_regs))
             return failure_return(KT_RP_CALL_REGS_FAILED);
+        siginfo_t si = {};
+        if (!getSignalInfo(&si)) return failure_return(KT_RP_CALL_WAIT_FAILED);
 
-        if (return_regs.KT_REG_PC > tmp_regs.KT_REG_PC && return_regs.KT_REG_PC <= tmp_regs.KT_REG_PC + 16)
+        size_t instructionSize = sizeof(KittyTraceInsns::SYSCALL);
+#if defined(__arm__)
+        if (tmp_regs.KT_REG_CPSR & KT_CPSR_T_MASK)
+            instructionSize = sizeof(KittyTraceInsns::THUMB_SYSCALL);
+#endif
+        bool stepTrap = WSTOPSIG(status) == SIGTRAP && (status >> 16) == 0 &&
+                        si.si_code == TRAP_TRACE;
+#if defined(__aarch64__)
+        // Linux can report syscall-exit stepping as a kernel-origin SI_USER.
+        const bool syscallExitTrap = WSTOPSIG(status) == SIGTRAP && (status >> 16) == 0 &&
+                                     si.si_code == SI_USER && si.si_pid == 0 && si.si_uid == 0;
+#else
+        const bool syscallExitTrap = false;
+#endif
+#if defined(__i386__) || defined(__x86_64__)
+        stepTrap = stepTrap || (WSTOPSIG(status) == SIGTRAP && (status >> 16) == 0 &&
+                               (si.si_code == TRAP_BRKPT || si.si_code == SI_KERNEL));
+#endif
+        if ((stepTrap || syscallExitTrap) && return_regs.KT_REG_PC == tmp_regs.KT_REG_PC + instructionSize)
             break;
+
+#if defined(__aarch64__)
+        if ((stepTrap || syscallExitTrap) && return_regs.pc == tmp_regs.pc && pendingSteps++ == 0)
+        {
+            // A pending step/exit stop precedes this instruction. Reload its
+            // arguments as well as SS before retrying the unchanged PC.
+            if (!setRegs(&tmp_regs)) return failure_return(KT_RP_CALL_REGS_FAILED);
+            if (!step()) return failure_return(KT_RP_CALL_STEP_FAILED);
+            running = true;
+            continue;
+        }
+#else
+        (void)pendingSteps;
+#endif
+        if ((WSTOPSIG(status) == SIGCHLD || WSTOPSIG(status) == SIGSTOP ||
+             WSTOPSIG(status) == SIGTSTP) && return_regs.KT_REG_PC == tmp_regs.KT_REG_PC &&
+            otherStops++ < 16)
+        {
+#if defined(__aarch64__)
+            return_regs.pstate |= KT_CPSR_SS_MASK;
+            if (!setRegs(&return_regs)) return failure_return(KT_RP_CALL_REGS_FAILED);
+#endif
+            if (!step()) return failure_return(KT_RP_CALL_STEP_FAILED);
+            running = true;
+            continue;
+        }
 
         KITTY_LOGE("callSyscall(%d): Process didn't stop after syscall!", int(sysnr));
 
@@ -880,9 +941,6 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
                    int(sysnr),
                    (void *)(return_regs.KT_REG_PC),
                    (void *)(return_regs.KT_REG_RET));
-
-        siginfo_t si = {};
-        getSignalInfo(&si);
 
         KITTY_LOGE("callSyscall(%d): SIG(%s) | CODE(%d) | ADDR(%p).",
                    int(sysnr),
@@ -899,9 +957,6 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
                        map.toString().c_str());
         }
 
-        if (!cont(WSTOPSIG(status)))
-            return failure_return(KT_RP_CALL_CONT_FAILED);
-
         return failure_return(KT_RP_CALL_MISMATCH_STOP);
 
     } while (true);
@@ -910,15 +965,16 @@ kitty_rp_call_t KittyTraceMgr::_callSyscall(long sysnr, int nargs, ...)
 
     if (_syscallGadget == 0)
     {
-        if (!pokeMem(target_pc_mem, backup_code.data(), backup_code.size()))
+        if (pokeMem(target_pc_mem, backup_code.data(), backup_code.size()) != backup_code.size())
         {
-            KITTY_LOGW("callSyscall(%d): Failed to restore PC(%p) memory code!", int(sysnr), (void *)target_pc_mem);
+            KITTY_LOGE("callSyscall(%d): Failed to restore PC(%p) memory code!", int(sysnr), (void *)target_pc_mem);
+            result.status = KT_RP_CALL_MEM_FAILED;
         }
     }
 
     // Restore regs
-    if (_autoRestoreRegs)
-        setRegs(&backup_regs);
+    if (_autoRestoreRegs && !setRegs(&backup_regs))
+        return {KT_RP_CALL_REGS_FAILED, {0}};
 
     KITTY_LOGD("callSyscall(%d): returned %p.", int(sysnr), (void *)result.result.ptr);
     return result;
