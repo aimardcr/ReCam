@@ -30,6 +30,8 @@ using VendorName = const char* (*)(uint32_t, uint64_t);
 using GetVendor = uint64_t (*)(const void*);
 using SetVendor = void (*)(void*, uint64_t);
 MetadataImport g_import, g_vendorImport;
+MetadataImport g_pendingImport;
+using ReturnPending = void (*)(bool, void*, void*, void*);
 VendorName g_vendorSection = nullptr, g_vendorName = nullptr;
 GetVendor g_getVendor = nullptr;
 constexpr uint64_t kUnknownVendor = UINT64_MAX;
@@ -53,6 +55,35 @@ struct Record {
 };
 Record g_records[128]{};
 uint32_t g_access = 0, g_next = 0;
+
+// InFlightRequest is private platform ABI. Only enable the queue guard for the
+// libcameraservice build whose layout and error/flush paths were verified.
+constexpr uint8_t kOplusCameraBuild[] = {
+    0x2b, 0xb8, 0x90, 0xed, 0x40, 0x65, 0xf1, 0xad,
+    0x9d, 0x01, 0x37, 0xaa, 0x9a, 0xe1, 0x5e, 0x83
+};
+constexpr char kReturnPending[] =
+    "_ZN7android7camera335returnAndRemovePendingOutputBuffersEbNS_2spINS_20NotificationListenerEEE"
+    "RNS0_15InFlightRequestERNS_19SessionStatsBuilderE";
+
+bool defer_capture_buffers(const void* request) {
+    if (!request || qcom::field<uint8_t>(request, 288) != 1 ||
+        qcom::field<uint8_t>(request, 28) != 0 || // haveResultMetadata
+        qcom::field<uint8_t>(request, 232) != 0 || // skipResultMetadata
+        qcom::field<int32_t>(request, 24) != 0) return false;
+    const auto count = qcom::field<size_t>(request, 184);
+    const auto* buffers = qcom::field<const uint8_t*>(request, 176);
+    if (!buffers || !count || count > 64) return false;
+    for (size_t i = 0; i < count; ++i) {
+        const auto* buffer = buffers + i * 32;
+        if (qcom::field<int32_t>(buffer, 16) != 0) continue;
+        const auto* native = qcom::field<const void* const*>(buffer, 8);
+        qcom::Handle handle;
+        if (native && qcom::read_handle(*native, handle) && handle.format == 0x113 &&
+            !(handle.flags & 0x08000000u)) return true;
+    }
+    return false;
+}
 
 void observe_metadata(const void* metadata, int64_t timestamp) {
     if (timestamp <= 0) return;
@@ -105,7 +136,8 @@ void observe_metadata(const void* metadata, int64_t timestamp) {
 
 } // namespace
 
-bool capture_layout_install(uintptr_t cameraFunction, uintptr_t replacement, uintptr_t vendorSetter) {
+bool capture_layout_install(uintptr_t cameraFunction, uintptr_t replacement, uintptr_t vendorSetter,
+                            uintptr_t pendingReturn) {
     char manufacturer[PROP_VALUE_MAX]{};
     __system_property_get("ro.product.manufacturer", manufacturer);
     if (strcmp(manufacturer, "OnePlus")) return false;
@@ -134,19 +166,37 @@ bool capture_layout_install(uintptr_t cameraFunction, uintptr_t replacement, uin
         metadata_import_install(cameraFunction, vendorSetter, g_vendorImport,
                                 "set_camera_metadata_vendor_id");
     const bool ok = metadata_import_install(cameraFunction, replacement, g_import);
+    if (ok && pendingReturn && metadata_import_build_id(cameraFunction, kOplusCameraBuild,
+                                                       sizeof(kOplusCameraBuild)))
+        metadata_import_install(cameraFunction, pendingReturn, g_pendingImport, kReturnPending);
     __android_log_print(ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, "ReCam",
-        "capture layout: per-frame Oplus metadata observer %s; provider identity %s",
-        ok ? "installed" : "unavailable", g_vendorImport.installed ? "enabled" : "unavailable");
+        "capture layout: per-frame Oplus metadata observer %s; provider identity %s; capture queue %s",
+        ok ? "installed" : "unavailable", g_vendorImport.installed ? "enabled" : "unavailable",
+        g_pendingImport.installed ? "guarded" : "unchanged");
     return ok;
 }
 
 bool capture_layout_remove() {
+    const bool pending = metadata_import_remove(g_pendingImport);
     const bool query = metadata_import_remove(g_import);
     const bool vendor = metadata_import_remove(g_vendorImport);
-    return query && vendor;
+    return pending && query && vendor;
 }
 uint32_t capture_layout_hook_count() {
-    return (g_import.installed ? 1u : 0u) + (g_vendorImport.installed ? 1u : 0u);
+    return (g_import.installed ? 1u : 0u) + (g_vendorImport.installed ? 1u : 0u) +
+           (g_pendingImport.installed ? 1u : 0u);
+}
+
+void capture_layout_return_pending(bool halBufferManager, void* listener, void* request,
+                                   void* stats, bool observe) {
+    const auto original = reinterpret_cast<ReturnPending>(
+        __atomic_load_n(&g_pendingImport.original, __ATOMIC_ACQUIRE));
+    if (!original) return;
+    // The framework retains ownership of the vector and its fences. A later
+    // result retries this function; final metadata, errors and shutdown release
+    // normally. Never wait while holding the framework's in-flight request lock.
+    if (observe && defer_capture_buffers(request)) return;
+    original(halBufferManager, listener, request, stats);
 }
 
 void capture_layout_set_vendor(void* metadata, uint64_t vendor, bool observe) {

@@ -189,6 +189,13 @@ extern "C" int recam_find_metadata(const void* metadata, uint32_t tag, void* ent
     return capture_layout_query(metadata, tag, entry, scope.substitute);
 }
 
+extern "C" void recam_return_pending(bool halBufferManager, void* listener, void* request,
+                                      void* stats)
+{
+    CallbackScope scope;
+    capture_layout_return_pending(halBufferManager, listener, request, stats, scope.substitute);
+}
+
 // --- the hook --------------------------------------------------------------------
 
 extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
@@ -407,7 +414,8 @@ bool framehook_install(uintptr_t target)
     }
     qcom_ubwc_retry_initialization();
     capture_layout_install(target, reinterpret_cast<uintptr_t>(&recam_find_metadata),
-                           reinterpret_cast<uintptr_t>(&recam_set_vendor));
+                           reinterpret_cast<uintptr_t>(&recam_set_vendor),
+                           reinterpret_cast<uintptr_t>(&recam_return_pending));
     __atomic_store_n(&g_lifecycle, Running, __ATOMIC_SEQ_CST);
     __atomic_store_n(&g_enabled, 1, __ATOMIC_SEQ_CST);
     LOGI("framehook: sources = %s + %s",

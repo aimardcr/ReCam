@@ -1,4 +1,5 @@
 #include "metadata_import.hpp"
+#include "../common/resident.hpp"
 
 #include <dlfcn.h>
 #include <elf.h>
@@ -33,6 +34,19 @@ struct Image {
         return 0;
     }
 
+    bool build_id(const uint8_t* expected, size_t size) const {
+        if (!expected || !size || size > sizeof(PayloadBuildId{}.bytes)) return false;
+        for (size_t i = 0; i < count; ++i) {
+            const auto& segment = ph[i];
+            if (segment.p_type != PT_NOTE || segment.p_memsz > 65536) continue;
+            const auto notes = pointer(segment.p_vaddr, segment.p_memsz);
+            if (!notes) continue;
+            const auto id = build_id_notes(reinterpret_cast<const void*>(notes), segment.p_memsz);
+            if (id.size) return id.size == size && !memcmp(id.bytes, expected, size);
+        }
+        return false;
+    }
+
     int protection(uintptr_t address, size_t pageSize) const {
         int flags = 0;
         for (size_t i = 0; i < count; ++i) {
@@ -58,7 +72,7 @@ struct Image {
 bool find_slot(const Image& image, uintptr_t*& slot,
                const char* wanted = "find_camera_metadata_ro_entry") {
     const size_t wantedSize = strlen(wanted) + 1;
-    if (wantedSize < 2 || wantedSize > 128) return false;
+    if (wantedSize < 2 || wantedSize > 256) return false;
     const Elf64_Dyn* dynamic = nullptr;
     size_t count = 0;
     for (size_t i = 0; i < image.count; ++i) {
@@ -146,6 +160,20 @@ bool exchange_slot(MetadataImport& hook, uintptr_t expected, uintptr_t replaceme
 }
 
 } // namespace
+
+bool metadata_import_build_id(uintptr_t cameraFunction, const uint8_t* expected, size_t size) {
+    if (!expected || !size || size > sizeof(PayloadBuildId{}.bytes)) return false;
+    Dl_info info{};
+    if (!dladdr(reinterpret_cast<void*>(cameraFunction), &info) || !info.dli_fbase ||
+        !info.dli_fname || !strstr(info.dli_fname, "/libcameraservice.so")) return false;
+    const auto base = reinterpret_cast<uintptr_t>(info.dli_fbase);
+    const auto* eh = reinterpret_cast<const Elf64_Ehdr*>(base);
+    if (memcmp(eh->e_ident, ELFMAG, SELFMAG) || eh->e_ident[EI_CLASS] != ELFCLASS64 ||
+        eh->e_type != ET_DYN || eh->e_phentsize != sizeof(Elf64_Phdr) ||
+        !eh->e_phnum || eh->e_phnum > 128 || eh->e_phoff > 4096) return false;
+    Image image{base, reinterpret_cast<const Elf64_Phdr*>(base + eh->e_phoff), eh->e_phnum};
+    return image.build_id(expected, size);
+}
 
 bool metadata_import_install(uintptr_t cameraFunction, uintptr_t replacement, MetadataImport& hook,
                              const char* name) {
