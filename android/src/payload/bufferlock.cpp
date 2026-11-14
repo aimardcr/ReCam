@@ -21,6 +21,10 @@ using PFN_getHardwareBuffer = AHardwareBuffer* (*)(void*);
 using PFN_lockPlanes        = int (*)(AHardwareBuffer*, uint64_t, int32_t,
                                       const ARect*, AHardwareBuffer_Planes*);
 using PFN_unlock            = int (*)(AHardwareBuffer*, int32_t*);
+using PFN_lock = int (*)(AHardwareBuffer*, uint64_t, int32_t, const ARect*, void**);
+using PFN_describe = void (*)(const AHardwareBuffer*, AHardwareBuffer_Desc*);
+PFN_lock g_lockBlob = nullptr;
+PFN_describe g_describe = nullptr;
 
 // system/core/libsystem/include/system/graphics.h, android16-release.
 struct AndroidYCbCr {
@@ -79,6 +83,8 @@ bool bufferlock_init()
     g_unlock = reinterpret_cast<PFN_unlock>(
         dlsym(RTLD_DEFAULT, "AHardwareBuffer_unlock"));
 
+    g_lockBlob = reinterpret_cast<PFN_lock>(dlsym(RTLD_DEFAULT, "AHardwareBuffer_lock"));
+    g_describe = reinterpret_cast<PFN_describe>(dlsym(RTLD_DEFAULT, "AHardwareBuffer_describe"));
     g_ok = g_getHwb && g_lockPlanes && g_unlock;
     if (!g_ok) {
         LOGE("bufferlock: missing symbols (getHwb=%p lockPlanes=%p unlock=%p) - "
@@ -225,6 +231,34 @@ void bufferlock_release(LockedBuffer* b)
     if (releaseFence >= 0) close(releaseFence);
 
     b->handle = nullptr;
+}
+
+bool bufferlock_acquire_blob(void* anwBuffer, int32_t fenceFd, LockedBlob* out)
+{
+    if (!g_ok || !g_lockBlob || !g_describe || !anwBuffer || !out) return false;
+    AHardwareBuffer* ahb = g_getHwb(anwBuffer);
+    if (!ahb) return false;
+    AHardwareBuffer_Desc desc{};
+    g_describe(ahb, &desc);
+    if (desc.format != AHARDWAREBUFFER_FORMAT_BLOB || desc.height != 1 || desc.layers != 1 ||
+        desc.width < 8 || desc.width > 64u * 1024 * 1024 ||
+        (desc.usage & AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT)) return false;
+    const int fence = fenceFd >= 0 ? dup(fenceFd) : -1;
+    if (fenceFd >= 0 && fence < 0) return false;
+    void* data = nullptr;
+    if (g_lockBlob(ahb, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN |
+                       AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, fence, nullptr, &data)) return false;
+    if (!data) { g_unlock(ahb, nullptr); return false; }
+    *out = {ahb, static_cast<uint8_t*>(data), desc.width};
+    return true;
+}
+
+void bufferlock_release_blob(LockedBlob* b)
+{
+    if (!b || !b->handle) return;
+    // Null out-fence requests synchronous completion before returning to camera.
+    g_unlock(static_cast<AHardwareBuffer*>(b->handle), nullptr);
+    *b = {};
 }
 
 }  // namespace recam

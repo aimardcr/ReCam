@@ -10,6 +10,7 @@
 #include "framehook.hpp"
 #include "inlinehook.hpp"
 #include "bufferlock.hpp"
+#include "jpeg_frame.hpp"
 #include "capture_layout.hpp"
 #include "qcom_ubwc.hpp"
 #include "qcom_layout.hpp"
@@ -26,7 +27,7 @@ namespace recam {
 // UBWC has its own converter; it must never reach the linear CPU-write path.
 bool framehook_format_supported(int32_t f)
 {
-    if (f == 0x23 || f == 0x32315659 || f == kQcomNv12Ubwc)
+    if (f == 0x21 || f == 0x23 || f == 0x32315659 || f == kQcomNv12Ubwc)
         return true;
     return f == 0x22 && bufferlock_have_ycbcr();  // IMPLEMENTATION_DEFINED
 }
@@ -239,8 +240,29 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
         else if (!sb.buffer)                    skip = "null buffer";
         else if (!framehook_format_supported(afmt))       skip = "unsupported format";
 
-        if (!skip && !camera_geometry_supported(static_cast<uint32_t>(aw), static_cast<uint32_t>(ah)))
+        if (!skip && afmt != 0x21 &&
+            !camera_geometry_supported(static_cast<uint32_t>(aw), static_cast<uint32_t>(ah)))
             skip = "unsupported dimensions";
+
+        if (!skip && afmt == 0x21) {
+            void* anw = const_cast<uint8_t*>(
+                reinterpret_cast<const uint8_t*>(sb.buffer)) - kAnwHandleOff;
+            LockedBlob blob;
+            if (!bufferlock_acquire_blob(anw, sb.releaseFence, &blob)) {
+                skip = "JPEG buffer lock failed";
+            } else {
+                FrameSource* used = jpeg_frame_fill(blob.data, blob.capacity, sw, sh, g_shm, g_bars);
+                bufferlock_release_blob(&blob);
+                if (used) {
+                    const uint64_t count = __atomic_add_fetch(&g_substituted, 1, __ATOMIC_RELAXED);
+                    if (log_stream(thiz, used->name(), sw, sh, afmt))
+                        LOGI("sub %llu [%s] stream=%p %ux%u JPEG via encoder",
+                             static_cast<unsigned long long>(count), used->name(), thiz, sw, sh);
+                } else {
+                    skip = "JPEG replacement unavailable";
+                }
+            }
+        }
 
         if (!skip && afmt == kQcomNv12Ubwc) {
             FrameSource* used = qcom_ubwc_fill(*sb.buffer, aw, ah, sb.releaseFence, g_shm, g_bars);
@@ -254,7 +276,7 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
             }
         }
 
-        if (!skip && afmt != kQcomNv12Ubwc) {
+        if (!skip && afmt != kQcomNv12Ubwc && afmt != 0x21) {
             void* anw = const_cast<uint8_t*>(
                 reinterpret_cast<const uint8_t*>(sb.buffer)) - kAnwHandleOff;
 

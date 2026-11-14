@@ -83,6 +83,21 @@ public:
         return false; // a new geometry must be served before it can be copied
     }
 
+    bool snapshot(const FrameTarget& t) override
+    {
+        if (fill(t)) return true;
+        if (!g_base || !t.valid()) return false;
+        ShmHeader* h = header();
+        // A still capture cannot wait for its new lane to be produced while
+        // holding the camera result callback. Reuse a fresh published frame.
+        for (uint32_t i = 0; i < kShmLanes; ++i) {
+            ShmLane& lane = h->lane[i];
+            RingRead access(&lane.access);
+            if (access && lane_configured(lane) && fill_lane(t, h, &lane)) return true;
+        }
+        return false;
+    }
+
 private:
     bool fill_lane(const FrameTarget& t, ShmHeader* h, ShmLane* l)
     {

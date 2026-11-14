@@ -42,6 +42,9 @@ public:
 
     // False means leave the real frame alone.
     virtual bool fill(const FrameTarget& t) = 0;
+
+    // One-shot captures can scale an already available frame to a new geometry.
+    virtual bool snapshot(const FrameTarget& t) { return fill(t); }
 };
 
 // SMPTE-style colour bars, BT.601 full range.

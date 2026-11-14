@@ -44,7 +44,8 @@ binaries. macOS builds are not notarized. `SHA256SUMS.txt` contains download che
 
 Compatibility depends on the device firmware, camera app, and buffer format.
 Preview, saved photos, and recordings can use different paths. Unsupported formats,
-including direct JPEG/BLOB and RAW outputs, pass through unchanged.
+including RAW outputs, pass through unchanged. JPEG photos are re-encoded with their
+original orientation; other embedded EXIF metadata and thumbnails are not copied.
 x86_64 is intended for emulator use.
 
 ## Using the desktop app

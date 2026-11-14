@@ -9,3 +9,8 @@ AndKittyInjector - https://github.com/MJx0/AndKittyInjector
 XZ Embedded - https://github.com/tukaani-project/xz-embedded
   Copyright (C) The XZ Embedded authors and contributors. Public domain.
   Full text: android/third_party/xz-embedded/COPYING
+
+JPGE - https://github.com/richgel999/jpeg-compressor
+  Richard Geldreich and contributors. Used under the public-domain license.
+  Vendored at commit 92cb85398975de03581a57a2e61a9d4f54b37703.
+  License text is included in android/third_party/jpge/jpge.cpp.

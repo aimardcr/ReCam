@@ -30,4 +30,13 @@ bool bufferlock_acquire_handle(const void* nativeHandle, int32_t width, int32_t 
 
 void bufferlock_release(LockedBuffer* b);
 
+struct LockedBlob {
+    void* handle = nullptr;
+    uint8_t* data = nullptr;
+    uint32_t capacity = 0;
+};
+
+bool bufferlock_acquire_blob(void* anwBuffer, int32_t fenceFd, LockedBlob* out);
+void bufferlock_release_blob(LockedBlob* b);
+
 }  // namespace recam

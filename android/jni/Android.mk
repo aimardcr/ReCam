@@ -36,6 +36,8 @@ LOCAL_SRC_FILES := \
     src/payload/payload.cpp \
     src/payload/framehook.cpp \
     src/payload/bufferlock.cpp \
+    src/payload/jpeg_frame.cpp \
+    third_party/jpge/jpge.cpp \
     src/payload/qcom_ubwc.cpp \
     src/payload/capture_layout.cpp \
     src/payload/metadata_import.cpp \
