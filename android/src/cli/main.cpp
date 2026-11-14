@@ -11,7 +11,6 @@ static void usage(FILE* out)
           "  feed [FILE]  Feed video, live H.264, or a test pattern\n"
           "  stop         Remove the hook and restore the real camera\n"
           "  status       Print device and payload state as JSON\n"
-          "  test         Run the payload self-test in cameraserver\n"
           "  watch        Re-inject when cameraserver respawns\n"
           "  --help       Show this help\n", out);
 }
@@ -42,7 +41,6 @@ int main(int argc, char** argv)
         {"inject", recam::cli::inject},
         {"stop", recam::cli::stop},
         {"status", recam::cli::status},
-        {"test", recam::cli::test},
         {"watch", recam::cli::watch},
     };
     if (argc == 2) {

@@ -62,11 +62,9 @@ Run on the device as root:
   recam feed     feed a file, live stream, or test pattern
   recam stop     remove the hook and restore the real camera
   recam status   print state as JSON
-  recam test     run self-tests (close camera apps and stop the feeder first)
   recam watch    re-inject when cameraserver respawns
 
-These subcommands replace the old recam_* executables. Replace both recam and
-librecam.so when upgrading, then stop/re-inject the payload.
+Update recam and librecam.so together, then stop/re-inject the payload.
 The feeder accepts FLV/AVC or raw Annex-B H.264 on 127.0.0.1:27183 and plays
 /data/local/tmp/recam_source.mp4 when no live source is available.
 """

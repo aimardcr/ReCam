@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 
 from .device import Device, DeviceLogs, STREAM_PORT
 from .logging_setup import setup_logs, install_exception_logging
-from .status import lane_summary, diagnostic_summary
+from .status import lane_summary
 from .streamer import (Streamer, camera_input, ffmpeg_input,
                        list_cameras, rtmp_input, rtmp_publish_hint)
 
@@ -92,14 +92,11 @@ class Window(QMainWindow):
         self.lbl_feeder = QLabel("-")
         self.lbl_lanes = QLabel("-")
         self.lbl_rate = QLabel("-")
-        self.lbl_diagnostics = QLabel("-")
-        self.lbl_diagnostics.setWordWrap(True)
         self.lbl_lanes.setWordWrap(True)
         for row, (name, w) in enumerate([("Payload", self.lbl_payload),
                                          ("Feeder", self.lbl_feeder),
                                          ("Lanes", self.lbl_lanes),
-                                         ("Rate", self.lbl_rate),
-                                         ("Diagnostics", self.lbl_diagnostics)]):
+                                         ("Rate", self.lbl_rate)]):
             grid.addWidget(QLabel(name), row, 0)
             w.setTextInteractionFlags(Qt.TextSelectableByMouse)
             grid.addWidget(w, row, 1)
@@ -397,8 +394,6 @@ class Window(QMainWindow):
         lanes = ring.get("lanes", [])
         self.lbl_lanes.setText("; ".join(lane_summary(lane) for lane in lanes)
                                if lanes else "No supported camera buffers observed")
-        self.lbl_diagnostics.setText(diagnostic_summary(ring) if ring.get("present")
-                                     else "No compatible frame ring; start ReCam to initialize it")
 
         self._update_rate(st, ring)
 

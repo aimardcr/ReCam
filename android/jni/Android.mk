@@ -18,10 +18,8 @@ KITTY_SRC := \
 
 ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
   RECAM_HOOK_SRC     := src/payload/inlinehook_arm64.cpp
-  RECAM_TEST_TARGETS := src/payload/selftest_targets.S
 else ifeq ($(TARGET_ARCH_ABI),x86_64)
   RECAM_HOOK_SRC     := src/payload/inlinehook_x86_64.cpp
-  RECAM_TEST_TARGETS := src/payload/selftest_targets_x86_64.S
 else
   $(error ReCam: no inline hook implementation for $(TARGET_ARCH_ABI))
 endif
@@ -46,9 +44,7 @@ LOCAL_SRC_FILES := \
     src/payload/cxx_runtime.cpp \
     src/payload/tramp_alloc.cpp \
     src/payload/tramp_arena.S \
-    src/payload/selftest.cpp \
-    $(RECAM_HOOK_SRC) \
-    $(RECAM_TEST_TARGETS)
+    $(RECAM_HOOK_SRC)
 
 LOCAL_CPPFLAGS += -std=c++17 -fno-exceptions -fno-rtti -Wall -Wextra -Werror
 LOCAL_CPPFLAGS += -fvisibility=hidden -ffunction-sections -fdata-sections
@@ -69,7 +65,6 @@ LOCAL_SRC_FILES := \
     src/injector/main.cpp \
     src/injector/stop.cpp \
     src/injector/status.cpp \
-    src/injector/test.cpp \
     src/injector/watch.cpp \
     src/injector/sepolicy.cpp \
     src/injector/elfsym.cpp \

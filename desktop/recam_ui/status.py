@@ -1,4 +1,4 @@
-"""Human-readable diagnostics, shared by the UI and dependency-free tests."""
+"""Camera lane status formatting."""
 
 
 def lane_summary(lane):
@@ -16,21 +16,3 @@ def lane_summary(lane):
         requested += f" (scaled from {width}x{height})"
     age = lane.get("age_ms", -1)
     return f"{requested}: {description}" + (f", {age} ms" if age >= 0 else "")
-
-
-def diagnostic_summary(ring):
-    diag = ring.get("diagnostics", {})
-    messages = []
-    if diag.get("unsupported_format"):
-        fmt = diag.get("last_unsupported_format", 0)
-        name = "Qualcomm UBWC" if fmt == 0x7FA30C06 else f"0x{fmt:x}"
-        messages.append(f"unsupported format {name}: {diag['unsupported_format']} frames passed through")
-    for key, label in (("lock_failed", "buffer lock failures"),
-                       ("invalid_layout", "invalid plane layouts"),
-                       ("unsupported_dimensions", "unsupported dimensions"),
-                       ("no_free_lane", "frames without an available lane")):
-        if diag.get(key):
-            messages.append(f"{diag[key]} {label}")
-    if diag.get("fallback_frames"):
-        messages.append(f"{diag['fallback_frames']} fallback-bar frames")
-    return "; ".join(messages) + " (since injection)" if messages else "No buffer warnings recorded"

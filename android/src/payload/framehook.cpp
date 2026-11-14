@@ -33,7 +33,7 @@ bool framehook_format_supported(int32_t f)
 
 namespace {
 
-// --- struct offsets, all verified in docs/01-ground-truth.md ---------------------
+// --- camera service LP64 structure offsets --------------------------------------
 
 // camera_stream_buffer, Camera3StreamInterface.h:74-80.
 struct StreamBufferView {
@@ -230,7 +230,6 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
         }
 
         __atomic_add_fetch(&g_frames, 1, __ATOMIC_RELAXED);
-        ShmHeader* diagnostics = shmsource_header();
 
         // ---- substitute -----------------------------------------------------
         const char* skip = nullptr;
@@ -247,8 +246,6 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
             FrameSource* used = qcom_ubwc_fill(*sb.buffer, aw, ah, sb.releaseFence, g_shm, g_bars);
             if (used) {
                 const uint64_t count = __atomic_add_fetch(&g_substituted, 1, __ATOMIC_RELAXED);
-                if (used == g_bars && diagnostics)
-                    __atomic_add_fetch(&diagnostics->fallbackFrames, 1, __ATOMIC_RELAXED);
                 if (log_stream(thiz, used->name(), aw, ah, afmt))
                     LOGI("sub %llu [%s] stream=%p %dx%d QCOM_NV12_UBWC via C2D",
                          static_cast<unsigned long long>(count), used->name(), thiz, aw, ah);
@@ -310,8 +307,6 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
 
                 if (filled) {
                     const uint64_t count = __atomic_add_fetch(&g_substituted, 1, __ATOMIC_RELAXED);
-                    if (used == g_bars && diagnostics)
-                        __atomic_add_fetch(&diagnostics->fallbackFrames, 1, __ATOMIC_RELAXED);
                     if (log_stream(thiz, used->name(), aw, ah, afmt, &t)) {
                         LOGI("sub %llu [%s] stream=%p %dx%d %s via %s | Y rs=%d ps=%d | "
                              "Cb rs=%d ps=%d | Cr rs=%d ps=%d | Cb-Cr=%lld | Cb-Y=%lld Cr-Y=%lld",
@@ -342,18 +337,6 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
 
         if (skip) {
             const uint64_t count = __atomic_add_fetch(&g_passedThrough, 1, __ATOMIC_RELAXED);
-            if (diagnostics) {
-                if (strcmp(skip, "unsupported format") == 0 ||
-                    strcmp(skip, "UBWC conversion unavailable") == 0) {
-                    __atomic_add_fetch(&diagnostics->unsupportedFormat, 1, __ATOMIC_RELAXED);
-                    __atomic_store_n(&diagnostics->lastUnsupportedFormat, static_cast<uint32_t>(afmt), __ATOMIC_RELAXED);
-                } else if (strcmp(skip, "lock failed") == 0)
-                    __atomic_add_fetch(&diagnostics->lockFailed, 1, __ATOMIC_RELAXED);
-                else if (strcmp(skip, "invalid plane layout") == 0)
-                    __atomic_add_fetch(&diagnostics->invalidLayout, 1, __ATOMIC_RELAXED);
-                else if (strcmp(skip, "unsupported dimensions") == 0)
-                    __atomic_add_fetch(&diagnostics->unsupportedDimensions, 1, __ATOMIC_RELAXED);
-            }
             if (log_stream(thiz, skip, aw, ah, afmt))
                 LOGI("pass %llu (%s) stream=%p type=%d %ux%u fmt=0x%x(%s) | buf %dx%d "
                      "fmt=0x%x(%s) stride=%d usage=0x%llx | status=%d rfence=%d",
@@ -420,8 +403,7 @@ bool framehook_install(uintptr_t target)
     __atomic_store_n(&g_enabled, 1, __ATOMIC_SEQ_CST);
     LOGI("framehook: sources = %s + %s",
          g_shm ? "shm" : "(no shm)", g_bars ? "colorbars" : "(none)");
-    LOGI("framehook: hooked returnBufferCheckedLocked at %p; "
-         "stream diagnostics enabled",
+    LOGI("framehook: hooked returnBufferCheckedLocked at %p",
          reinterpret_cast<void*>(target));
     return true;
 }

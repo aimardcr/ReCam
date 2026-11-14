@@ -280,10 +280,6 @@ static Outcome attach_and_feed()
     KITTY_LOGI("feed: source = %s, plus anything that connects. Ctrl-C to stop.",
                g_haveVideo ? "decoded video" : "built-in test pattern");
 
-    const char* profileEnv = getenv("RECAM_PROFILE");
-    const bool profiling = profileEnv && strcmp(profileEnv, "1") == 0;
-    __atomic_store_n(&h->profiling, profiling ? 1u : 0u, __ATOMIC_RELEASE);
-
     uint64_t frameNo = 0;
     uint64_t lastLog = 0;
     uint64_t lastCheck = now_ns();
@@ -352,7 +348,6 @@ static Outcome attach_and_feed()
             uint8_t* buf = static_cast<uint8_t*>(base) + l.dataOffset +
                            publication.slot * l.bufBytes;
 
-            const uint64_t scaleStart = profiling ? now_ns() : 0;
             if (haveSrc) {
                 if (!recam::scale_to_i420(src, buf, lw, lh)) continue;
             } else {
@@ -361,17 +356,7 @@ static Outcome attach_and_feed()
 
             // Publish only after the pixels are in place.
             const uint64_t publishedNs = now_ns();
-            const uint64_t seq = publication.seq;
             publication.publish(publishedNs);
-            if (profiling && haveSrc && used == &g_stream && src.timing.receivedNs) {
-                const auto& t = src.timing;
-                __android_log_print(ANDROID_LOG_INFO, "ReCamLatency",
-                    "event=publish lane=%u seq=%llu width=%u height=%u wire=%llu receive=%llu queue=%llu decode=%llu copy=%llu scale=%llu publish=%llu",
-                    i, (unsigned long long)seq, lw, lh, (unsigned long long)t.wireOffset,
-                    (unsigned long long)t.receivedNs, (unsigned long long)t.queuedNs,
-                    (unsigned long long)t.decodedNs, (unsigned long long)t.copiedNs,
-                    (unsigned long long)scaleStart, (unsigned long long)publishedNs);
-            }
             served++;
         }
         if (used) used->release();
@@ -415,14 +400,13 @@ static Outcome attach_and_feed()
             continue;
         }
 
-        // File/pattern playback retains its original tick.
+        // File/pattern playback follows the source frame interval.
         deadline += intervalNs;
         const uint64_t after = now_ns();
         if (deadline > after) usleep(static_cast<useconds_t>((deadline - after) / 1000));
         else                  deadline = after;   // behind: drop the debt, do not spiral
     }
 
-    __atomic_store_n(&h->profiling, 0u, __ATOMIC_RELEASE);
     munmap(base, cb.shm_size);
     if (out == Outcome::Stopped)
         KITTY_LOGI("feed: stopping after %llu frames. The payload falls back to colour "

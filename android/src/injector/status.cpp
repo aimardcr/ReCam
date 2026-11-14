@@ -110,13 +110,6 @@ int recam::cli::status()
         printf("    \"consumed\": %llu,\n", static_cast<unsigned long long>(h.consumed));
         printf("    \"dropped\": %llu,\n", static_cast<unsigned long long>(h.dropped));
         printf("    \"producer_skipped\": %llu,\n", static_cast<unsigned long long>(h.producerSkipped));
-        printf("    \"diagnostics\": { \"unsupported_format\": %llu, \"last_unsupported_format\": %u, "
-               "\"lock_failed\": %llu, \"invalid_layout\": %llu, \"unsupported_dimensions\": %llu, "
-               "\"fallback_frames\": %llu, \"no_free_lane\": %llu },\n",
-               static_cast<unsigned long long>(h.unsupportedFormat), h.lastUnsupportedFormat,
-               static_cast<unsigned long long>(h.lockFailed), static_cast<unsigned long long>(h.invalidLayout),
-               static_cast<unsigned long long>(h.unsupportedDimensions),
-               static_cast<unsigned long long>(h.fallbackFrames), static_cast<unsigned long long>(h.noFreeLane));
         printf("    \"lanes\": [");
 
         bool first = true;

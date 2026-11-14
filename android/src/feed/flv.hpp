@@ -52,7 +52,7 @@ inline bool config(const uint8_t* p, size_t n, unsigned& lengthBytes,
     return true;
 }
 inline bool picture(const uint8_t* p, size_t n, unsigned width,
-                    std::vector<uint8_t>& annexb, size_t& firstVcl) {
+                    std::vector<uint8_t>& annexb) {
     if (width != 1 && width != 2 && width != 4) return false;
     annexb.clear();
     bool vcl = false;
@@ -65,7 +65,6 @@ inline bool picture(const uint8_t* p, size_t n, unsigned width,
         if (h264::is_vcl(type)) {
             const bool first = h264::starts_picture(p + pos, size);
             if ((!vcl && !first) || (vcl && first)) return false;
-            if (!vcl) firstVcl = pos;
             vcl = true;
         }
         annexb.insert(annexb.end(), {0, 0, 0, 1});

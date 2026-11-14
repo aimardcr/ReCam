@@ -321,16 +321,6 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
     return 0;
 }
 
-// Exercises the hook and pixel paths a live camera session never reaches.
-extern "C" EXPORT int recam_selftest(uintptr_t key)
-{
-    if (key != kInjectorKey) {
-        LOGW("recam_selftest: bad key, ignoring");
-        return -1;
-    }
-    return recam::selftest_run();
-}
-
 // Only reachable if injected into a process that has a JVM. cameraserver does not.
 extern "C" EXPORT int JNI_OnLoad(void* /*vm*/, void* key)
 {

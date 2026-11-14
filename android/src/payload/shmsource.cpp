@@ -79,7 +79,7 @@ public:
             if (access && lane.reqWidth == w && lane.reqHeight == hh)
                 return fill_lane(t, h, &lane);
         }
-        if (!claim_lane(h, w, hh)) __atomic_add_fetch(&h->noFreeLane, 1, __ATOMIC_RELAXED);
+        claim_lane(h, w, hh);
         return false; // a new geometry must be served before it can be copied
     }
 
@@ -91,7 +91,6 @@ private:
 
         RingFrame frame(*l);
         if (!frame.seq) return false;
-        const uint64_t seq = frame.seq;
         const uint64_t stamp = l->slotNs[frame.slot];
         const uint64_t now = now_ns();
         if (now > stamp && now - stamp > kFrameStaleNs) return false;
@@ -102,17 +101,7 @@ private:
                              static_cast<uint64_t>(frame.slot) * l->bufBytes;
         if (off + l->bufBytes > g_size) return false;
 
-        const bool profiling = __atomic_load_n(&h->profiling, __ATOMIC_ACQUIRE) != 0;
-        const uint64_t copyStart = profiling ? now_ns() : 0;
         if (!blit_i420(g_base + off, l->width, l->height, t)) return false;
-        const uint64_t copyEnd = profiling ? now_ns() : 0;
-
-        if (profiling) {
-            __android_log_print(ANDROID_LOG_INFO, "ReCamLatency",
-                "event=consume lane=%u seq=%llu start=%llu end=%llu",
-                static_cast<unsigned>(l - h->lane), (unsigned long long)seq,
-                (unsigned long long)copyStart, (unsigned long long)copyEnd);
-        }
         __atomic_add_fetch(&h->consumed, 1, __ATOMIC_RELAXED);
         return true;
     }
@@ -181,8 +170,5 @@ void shmsource_destroy()
 }
 
 FrameSource* shmsource_get() { return g_base ? &g_source : nullptr; }
-
-ShmHeader* shmsource_header() { return g_base ? header() : nullptr; }
-uint8_t*   shmsource_base()   { return g_base; }
 
 }  // namespace recam

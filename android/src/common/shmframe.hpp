@@ -9,7 +9,7 @@ namespace recam {
 
 // "RECAMSHM" little-endian.
 static const uint64_t kShmMagic   = 0x4D48534D41434552ULL;
-static const uint32_t kShmVersion = 5;
+static const uint32_t kShmVersion = 6;
 
 // Distinct camera buffer sizes served at once; a session rarely opens more.
 static const uint32_t kShmLanes = 4;
@@ -21,7 +21,7 @@ static const uint32_t kLaneBufs = 3;
 static const uint32_t kShmArenaBase = 4096;
 
 // Maximum stored frame. Larger camera outputs are scaled on consumption.
-// The 35.9 MiB ring budget is unchanged regardless of requested camera size.
+// The ring reserves 35.9 MiB regardless of requested camera size.
 static const uint32_t kShmMaxWidth  = 1920;
 static const uint32_t kShmMaxHeight = 1088;
 
@@ -53,25 +53,14 @@ struct ShmHeader {
     uint32_t version;
     uint32_t laneCount;
 
-    // Diagnostics only, summed across lanes.
+    // Activity counters summed across lanes.
     volatile uint64_t published;
     volatile uint64_t consumed;
     volatile uint64_t dropped;
 
     ShmLane lane[kShmLanes];
 
-    // Opt-in per-frame logging, enabled by RECAM_PROFILE=1 in the feeder.
-    uint32_t profiling;
     uint64_t producerSkipped;  // all non-current slots pinned; last frame retained
-
-    // Cumulative since injection; status snapshots are diagnostic, not transactional.
-    uint64_t unsupportedFormat;
-    uint64_t lockFailed;
-    uint64_t invalidLayout;
-    uint64_t unsupportedDimensions;
-    uint64_t fallbackFrames;
-    uint64_t noFreeLane;
-    uint32_t lastUnsupportedFormat;
 };
 
 static_assert(sizeof(ShmHeader) <= kShmArenaBase, "header exceeds reserved page");

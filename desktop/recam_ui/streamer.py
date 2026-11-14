@@ -47,14 +47,6 @@ def ffmpeg_input(text):
         args += ["-stream_loop", "-1"]
     return args + ["-i", text]
 
-
-def file_input(path, loop=True):
-    args = ["-re"]
-    if loop:
-        args += ["-stream_loop", "-1"]
-    return args + ["-i", path]
-
-
 # ---------------------------------------------------------------- enumeration
 
 _DSHOW_LINE = re.compile(r'"([^"]+)"\s+\((\w+)\)')
@@ -86,12 +78,9 @@ def list_cameras(ffmpeg=None):
 
 # ---------------------------------------------------------------- the child
 
-def build_command(ffmpeg, input_args, port, fps=30, max_height=1080, transport="flv"):
+def build_command(ffmpeg, input_args, port, fps=30, max_height=1080):
     """`-bf 0` is not optional: the device synthesises timestamps in decode order."""
-    if transport not in ("flv", "annexb"):
-        raise ValueError("transport must be flv or annexb")
-    muxer = (["-flvflags", "no_duration_filesize", "-flush_packets", "1", "-f", "flv"]
-             if transport == "flv" else ["-f", "h264"])
+    muxer = ["-flvflags", "no_duration_filesize", "-flush_packets", "1", "-f", "flv"]
     return [ffmpeg, "-hide_banner", "-loglevel", "warning"] + list(input_args) + [
         "-an",
         "-c:v", "libx264",

@@ -10,7 +10,6 @@
 #include <errno.h>
 #include <time.h>
 #include <vector>
-#include <map>
 #include <cstdlib>
 #include <fcntl.h>
 #include <poll.h>
@@ -95,11 +94,6 @@ struct VideoDecoder::Impl {
     uint64_t qIn = 0, qOut = 0, qImg = 0, lastStatNs = 0;
     bool     warnedFit = false;
     bool     warnedBacklog = false;
-    bool profiling = [] { const char* p = getenv("RECAM_PROFILE"); return p && strcmp(p, "1") == 0; }();
-    ByteTimeline arrival;
-    FrameTiming assembling{}, outputTiming{};
-    std::map<int64_t, FrameTiming> pending;
-
 };
 
 VideoDecoder::~VideoDecoder() { close(); }
@@ -298,25 +292,17 @@ bool VideoDecoder::queue_au()
         return false;
     } else {
         memcpy(dst, d->au.data(), d->au.size());
-        const uint64_t queued = d->profiling ? mono_ns() : 0;
         const auto rc = AMediaCodec_queueInputBuffer(d->codec, in, 0, d->au.size(), d->ptsUs, 0);
         if (rc != AMEDIA_OK) {
             KITTY_LOGE("decoder: queue input failed (%d); closing stream", rc);
             d->ended = true;
             return false;
         }
-        if (d->profiling && d->assembling.receivedNs) {
-            d->assembling.queuedNs = queued;
-            d->pending[d->ptsUs] = d->assembling;
-            // Diagnostics cannot grow without bound if output stalls.
-            if (d->pending.size() > 256) d->pending.erase(d->pending.begin());
-        }
         d->qIn++;
     }
 
     d->ptsUs += mIntervalUs;
     d->au.clear();
-    d->assembling = {};
     return true;
 }
 
@@ -330,7 +316,6 @@ bool VideoDecoder::pump_stream()
     for (int i = 0; i < 8 && !d->readClosed; i++) {
         const ssize_t n = ::read(d->sock, chunk, sizeof(chunk));
         if (n > 0) {
-            if (d->profiling) d->arrival.append(static_cast<uint64_t>(n), mono_ns());
             d->buf.insert(d->buf.end(), chunk, chunk + n);
             continue;
         }
@@ -418,11 +403,6 @@ void VideoDecoder::pump_annexb()
             drain_available();
         }
 
-        if (d->profiling && h264::is_vcl(nal.type) && !d->assembling.receivedNs) {
-            d->assembling.wireOffset = d->arrival.consumed + (nal.data - d->buf.data());
-            d->assembling.receivedNs = d->arrival.at(d->assembling.wireOffset);
-        }
-
         // Parameter sets already went in as csd; re-sending them is harmless noise.
         if (nal.type != h264::kNalSps && nal.type != h264::kNalPps) {
             static const uint8_t kStart[4] = { 0, 0, 0, 1 };
@@ -435,7 +415,6 @@ void VideoDecoder::pump_annexb()
 
     if (consumed) {
         d->buf.erase(d->buf.begin(), d->buf.begin() + consumed);
-        if (d->profiling) d->arrival.discard(consumed);
     }
 
     if (d->readClosed && d->buf.empty() && d->started && !d->au.empty()) {
@@ -453,7 +432,6 @@ void VideoDecoder::pump_flv()
     };
     auto discard = [&](size_t n) {
         d->buf.erase(d->buf.begin(), d->buf.begin() + n);
-        if (d->profiling) d->arrival.discard(n);
     };
     if (!d->au.empty()) {
         drain_available();
@@ -489,13 +467,8 @@ void VideoDecoder::pump_flv()
                 d->nalLengthBytes = width;
                 if (!d->started && !start_codec_from_csd()) { invalid(); return; }
             } else if (p[1] == 1) {
-                size_t vcl = 0;
                 if (!d->started || !flv::picture(p + 5, tag.size - 5, d->nalLengthBytes,
-                                                 d->au, vcl)) { invalid(); return; }
-                if (d->profiling) {
-                    d->assembling.wireOffset = d->arrival.consumed + 11 + 5 + vcl;
-                    d->assembling.receivedNs = d->arrival.at(d->assembling.wireOffset);
-                }
+                                                 d->au)) { invalid(); return; }
             } else if (p[1] != 2 || tag.size != 5) { invalid(); return; }
         }
         discard(tag.bytes);
@@ -617,16 +590,6 @@ bool VideoDecoder::drain_output(const char* source, int64_t timeoutUs, bool* pro
     if (out < 0) return false;
     if (progressed) *progressed = true;
     if (d->sock >= 0 && (info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM)) d->ended = true;
-    FrameTiming timing{};
-    if (d->profiling) {
-        auto it = d->pending.find(info.presentationTimeUs);
-        if (it != d->pending.end()) {
-            timing = it->second;
-            timing.decodedNs = mono_ns();
-            d->pending.erase(it);
-        }
-    }
-
     if (!d->formatSeen) update_output_format(source);
 
     size_t bytes = 0;
@@ -637,8 +600,6 @@ bool VideoDecoder::drain_output(const char* source, int64_t timeoutUs, bool* pro
     bool copied = false;
     if (validRange) {
         d->frame.assign(data + offset, data + offset + size);
-        if (d->profiling) timing.copiedNs = mono_ns();
-        d->outputTiming = timing;
         d->frameReady = true;
         copied = true;
     } else if (!d->warnedOutput && !(info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM)) {
@@ -724,7 +685,6 @@ bool VideoDecoder::describe_frame(SrcFrame* out)
     }
 
     const uint8_t* base = d->frame.data();
-    out->timing = d->outputTiming;
     out->width = width;
     out->height = height;
     out->y = { base + static_cast<size_t>(d->cropTop) * stride + d->cropLeft,

@@ -57,7 +57,7 @@ Record g_records[128]{};
 uint32_t g_access = 0, g_next = 0;
 
 // InFlightRequest is private platform ABI. Only enable the queue guard for the
-// libcameraservice build whose layout and error/flush paths were verified.
+// matching libcameraservice build with these request and buffer layouts.
 constexpr uint8_t kOplusCameraBuild[] = {
     0x2b, 0xb8, 0x90, 0xed, 0x40, 0x65, 0xf1, 0xad,
     0x9d, 0x01, 0x37, 0xaa, 0x9a, 0xe1, 0x5e, 0x83
