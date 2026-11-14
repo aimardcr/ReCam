@@ -1,15 +1,21 @@
 """Every adb invocation lives here; nothing else builds an adb command line."""
 
+from collections import deque
 import hashlib
 import json
+import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 
 REMOTE_DIR = "/data/local/tmp"
 REMOTE_MARKER = f"{REMOTE_DIR}/.recam_build"
 REMOTE_SOURCE = f"{REMOTE_DIR}/recam_source.mp4"
+REMOTE_FEED_LOG = f"{REMOTE_DIR}/recam-feed-start.log"
 STREAM_PORT = 27183
 
 BINARIES = ["librecam.so", "recam"]
@@ -17,6 +23,7 @@ EXECUTABLES = [b for b in BINARIES if not b.endswith(".so")]
 
 # Windows would otherwise flash a console window for every adb call.
 _NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+_log = logging.getLogger("recam.adb")
 
 
 class DeviceError(Exception):
@@ -52,6 +59,10 @@ def build_id(libs_dir):
 class Device:
     def __init__(self, serial=None, adb=None):
         self.serial = serial
+        self._feed_proc = None
+        self._feed_thread = None
+        self._feed_output = deque(maxlen=32)
+        self._feed_lock = threading.Lock()
         self.adb = adb or shutil.which("adb")
         if not self.adb:
             raise DeviceError("adb is not on PATH")
@@ -65,8 +76,16 @@ class Device:
         return base + list(args)
 
     def _run(self, args, timeout=30):
-        p = subprocess.run(self._argv(args), capture_output=True, text=True,
-                           timeout=timeout, creationflags=_NO_WINDOW)
+        argv = self._argv(args)
+        _log.info("Command: %r", argv)
+        try:
+            p = subprocess.run(argv, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace",
+                               timeout=timeout, creationflags=_NO_WINDOW)
+        except Exception:
+            _log.exception("ADB command failed: %r", argv)
+            raise
+        _log.info("Exit %s; stdout=%s; stderr=%s", p.returncode, p.stdout.strip(), p.stderr.strip())
         return p.returncode, p.stdout.strip(), p.stderr.strip()
 
     def shell(self, cmd, root=True, timeout=30):
@@ -78,8 +97,11 @@ class Device:
         adb = adb or shutil.which("adb")
         if not adb:
             return []
+        _log.info("Command: %r", [adb, "devices"])
         p = subprocess.run([adb, "devices"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace",
                            timeout=15, creationflags=_NO_WINDOW)
+        _log.info("Exit %s; stdout=%s; stderr=%s", p.returncode, p.stdout.strip(), p.stderr.strip())
         out = []
         for line in p.stdout.splitlines()[1:]:
             parts = line.split()
@@ -139,13 +161,103 @@ class Device:
     def clear_source(self):
         self.shell(f"rm -f {REMOTE_SOURCE}")
 
+    def close_feeder_session(self):
+        proc, reader = self._feed_proc, self._feed_thread
+        if proc is None:
+            return
+        try:
+            proc.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=2)
+        if reader:
+            reader.join(timeout=1)
+        self._feed_proc = self._feed_thread = None
+
+    def _read_feeder_session(self, proc):
+        with proc.stdout:
+            while True:
+                line = proc.stdout.readline(4096)
+                if not line:
+                    return
+                with self._feed_lock:
+                    self._feed_output.append(line)
+                _log.info("Feeder session: %s", line.rstrip())
+
     def start_feeder(self):
-        # nohup + background, so the adb shell can return while it keeps running.
-        self.shell(f"nohup {REMOTE_DIR}/recam feed >/dev/null 2>&1 &")
+        if self._feed_proc is not None:
+            raise DeviceError("Previous feeder session is still owned; stop it first")
+        detail = ""
+        pid = 0
+        try:
+            # Keep adb/su alive until Stop; a background shell PID is not proof
+            # that the feeder survived its launching shell's exit.
+            cmd = (f"umask 077; exec {REMOTE_DIR}/recam feed "
+                   f"</dev/null >{REMOTE_FEED_LOG} 2>&1")
+            argv = self._argv(["shell", f"su -c '{cmd}'"])
+            _log.info("Feeder session command: %r", argv)
+            with self._feed_lock:
+                self._feed_output.clear()
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, encoding="utf-8", errors="replace",
+                                    creationflags=_NO_WINDOW)
+            self._feed_proc = proc
+            self._feed_thread = threading.Thread(target=self._read_feeder_session,
+                                                 args=(proc,), daemon=True)
+            self._feed_thread.start()
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                _, detail, _ = self.shell(f"tail -c 65536 {REMOTE_FEED_LOG}", timeout=5)
+                if proc.poll() is not None:
+                    self._feed_thread.join(timeout=1)
+                    with self._feed_lock:
+                        session_output = "".join(self._feed_output).strip()
+                    raise DeviceError(f"Feeder session exited (code {proc.returncode}): "
+                                      f"{session_output or detail.strip() or 'no startup output'}")
+                markers = re.findall(r"RECAM_FEED_READY pid=(\d+) generation=(\d+)", detail)
+                ready = markers[-1] if markers else None
+                st = self.status()
+                if st is not None and ready:
+                    feeder = st.get("feeder", {})
+                    payload = st.get("payload", {})
+                    pid = int(ready[0])
+                    if (pid > 0 and feeder.get("running") and feeder.get("pid") == pid
+                            and payload.get("active")
+                            and int(ready[1]) == payload.get("generation")
+                            and proc.poll() is None):
+                        _log.info("Feeder ready: pid=%s generation=%s", pid, ready[1])
+                        return pid
+                time.sleep(0.2)
+            raise DeviceError(f"Feeder did not become ready (pid {pid}). "
+                              f"{detail.strip() or 'See the saved device/payload logs.'}")
+        except Exception:
+            _log.exception("Feeder startup failed: pid=%s output=%s", pid, detail)
+            try:
+                self.stop_feeder()
+            except Exception:
+                _log.exception("Could not clean up failed feeder startup")
+            raise
 
     def stop_feeder(self):
-        # Anchor argv[0] and argv[1], excluding the shell and other subcommands.
-        self.shell(f'pkill -f "^{REMOTE_DIR}/recam feed( |$)"')
+        try:
+            # Anchor argv[0] and argv[1], excluding the shell and other subcommands.
+            rc, out, err = self.shell(f'pkill -f "^{REMOTE_DIR}/recam feed( |$)"')
+            if rc not in (0, 1):
+                raise DeviceError(f"Could not stop feeder: {out} {err}")
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                st = self.status()
+                if st is not None and not st.get("feeder", {}).get("running"):
+                    return
+                time.sleep(0.2)
+            raise DeviceError("Previous feeder did not stop; refusing to start a competing producer")
+        finally:
+            self.close_feeder_session()
 
     def status(self):
         rc, out, _ = self.shell(f"{REMOTE_DIR}/recam status", timeout=15)
@@ -165,3 +277,105 @@ class Device:
 
     def remove_forward(self, port=STREAM_PORT):
         self._run(["forward", "--remove", f"tcp:{port}"])
+
+
+class DeviceLogs:
+    """One reconnecting logcat reader, kept alive across Start/Stop on one device."""
+
+    def __init__(self):
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._proc = None
+        self._thread = None
+        self._key = None
+        self._ready = threading.Event()
+
+    def start(self, device):
+        key = (device.adb, device.serial)
+        if self._key == key and self._thread and self._thread.is_alive():
+            return
+        self.stop()
+        self._key = key
+        self._stop.clear()
+        self._ready.clear()
+        argv = device._argv(["logcat", "-b", "all", "-v", "threadtime", "*:V"])
+        self._thread = threading.Thread(target=self._capture, args=(argv, key), daemon=True)
+        self._thread.start()
+        if not self._ready.wait(timeout=5):
+            _log.warning("Logcat reader has not started within five seconds")
+
+    def _capture(self, argv, key):
+        device_log = logging.getLogger("recam.device")
+        payload_log = logging.getLogger("recam.payload")
+
+        def record(raw):
+            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            device_log.info("[%s] %s", key[1], line)
+            # Preserve camera/feeder messages separately from noisy system output.
+            if any(tag in line for tag in ("ReCam", "recam", "KittyMemoryEx", "UBWC", "C2D", "qdMetaData")):
+                payload_log.info("[%s] %s", key[1], line)
+
+        while not self._stop.is_set():
+            proc = None
+            try:
+                with self._lock:
+                    if self._stop.is_set():
+                        break
+                    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                            creationflags=_NO_WINDOW)
+                    self._proc = proc
+                self._ready.set()
+                _log.info("Logcat connected: %s", key[1])
+                device_log.info("Logcat capture/reconnect: %s (includes retained device history)", key[1])
+                pending = b""
+                while True:
+                    chunk = proc.stdout.read1(65536)
+                    if not chunk:
+                        break
+                    pending += chunk
+                    while b"\n" in pending:
+                        line, pending = pending.split(b"\n", 1)
+                        record(line)
+                    if len(pending) >= 65536:
+                        record(pending)
+                        pending = b""
+                if pending:
+                    record(pending)
+                _log.info("Logcat exited: device=%s rc=%s", key[1], proc.wait())
+            except Exception:
+                self._ready.set()
+                _log.exception("Logcat capture failed: %s", key[1])
+            finally:
+                if proc:
+                    self._terminate(proc)
+                    proc.stdout.close()
+                with self._lock:
+                    if self._proc is proc:
+                        self._proc = None
+            if self._stop.wait(2):
+                break
+
+    @staticmethod
+    def _terminate(proc):
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=2)
+            except ProcessLookupError:
+                pass
+
+    def stop(self):
+        self._stop.set()
+        with self._lock:
+            proc = self._proc
+        if proc:
+            self._terminate(proc)
+        if self._thread:
+            self._thread.join(timeout=5)
+            if self._thread.is_alive():
+                raise DeviceError("Logcat reader did not stop")
+        self._thread = None
+        self._key = None

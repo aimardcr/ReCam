@@ -16,7 +16,7 @@ body:
     attributes:
       label: ReCam version and download
       description: Give the release version and archive name, or the commit SHA if built from source. Say whether you also tried the latest release.
-      placeholder: "v0.1.2, ReCam-v0.1.2-windows-x64.zip; also reproduced on the latest release"
+      placeholder: "v0.1.3, ReCam-v0.1.3-windows-x64.zip; also reproduced on the latest release"
     validations:
       required: true
 
@@ -127,32 +127,38 @@ body:
   - type: markdown
     attributes:
       value: |
-        ### Collect diagnostics
-        Run this on the host **before starting ReCam**, reproduce the issue, then press Ctrl+C:
+        ### Attach session logs
+        With the desktop app, reproduce the problem and open the `logs/` directory
+        shown in the UI. Attach `desktop-<pid>.log`, `device-<pid>.log`, and
+        `payload-<pid>.log` from the same session, including numbered backups.
+
+        For CLI-only use, capture logs before reproducing the issue:
 
         ```sh
-        adb logcat -b all -v threadtime -s ReCam KittyMemoryEx AndroidRuntime libc DEBUG > recam-logcat.txt
+        adb logcat -b all -v threadtime > recam-logcat.txt
         ```
 
-        While the failure is visible, run these in another terminal:
+        While the failure is visible, collect state in another terminal:
 
         ```sh
-        adb shell su -c '/data/local/tmp/recam status' > recam-status.txt
+        adb shell "su -c '/data/local/tmp/recam status'" > recam-status.txt
         adb shell dumpsys media.camera > camera-service.txt
         ```
 
-        With multiple devices connected, add `-s DEVICE_SERIAL` immediately after `adb`.
-        These commands assume v0.1.2 or newer. If your root setup uses a different command,
-        run `recam status` as root using your usual method and include the output.
-        Attach the three files below, along with any errors from the ReCam desktop log.
-        For a desktop startup failure, include the launch error or terminal output instead.
-        You may redact personal paths, device serial numbers, and unrelated app information.
+        If the root command fails, run `adb shell`, then `su`, then
+        `/data/local/tmp/recam status`, and paste the JSON or error.
+        For preview versus recording problems, collect camera-service output
+        in each affected mode. With multiple devices, add `-s DEVICE_SERIAL`
+        immediately after `adb`.
+
+        For a desktop startup failure, include the launch error or terminal output.
+        Review logs and redact private information before attaching them.
 
   - type: textarea
     id: diagnostics
     attributes:
-      label: Diagnostic files and errors
-      description: Drag the logcat, status, and camera-service files here, or paste their output. Include desktop errors and any Test pattern details. If a diagnostic is unavailable, explain why and include the command's error.
+      label: Session logs and errors
+      description: Attach the three desktop session logs, or CLI logcat/status files. Include camera-service output for mode-specific failures. If a log is unavailable, explain why and include any error.
       placeholder: "Attach files or paste output here. Explain any unavailable diagnostics."
     validations:
       required: true

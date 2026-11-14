@@ -16,8 +16,4 @@ void shmsource_destroy();
 // nullptr if the ring was never created or has been released.
 FrameSource* shmsource_get();
 
-// The mapped ring; the self-test plays feeder through it.
-ShmHeader* shmsource_header();
-uint8_t*   shmsource_base();
-
 }  // namespace recam

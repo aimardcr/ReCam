@@ -1,4 +1,4 @@
-// Optional extension in the existing control page; the v2 prefix stays intact.
+// Resident-payload identity stored after the version-2 control block.
 #pragma once
 #include <elf.h>
 #include <stddef.h>

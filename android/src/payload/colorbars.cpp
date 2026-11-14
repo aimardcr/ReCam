@@ -27,7 +27,7 @@ constexpr Bar kBars[kBarCount] = {
     {   0, 128, 128 },  // black
 };
 
-// Rebuilt only when the geometry changes; lives in .bss, never allocated.
+// Per-callback rows: camera streams may arrive concurrently with different sizes.
 constexpr int kMaxWidth = 8192;
 
 struct RowCache {
@@ -37,9 +37,7 @@ struct RowCache {
     uint8_t cr[kMaxWidth / 2];
 };
 
-RowCache g_rows;
-
-void build_rows(int32_t width)
+void build_rows(RowCache& g_rows, int32_t width)
 {
     if (g_rows.width == width) return;
 
@@ -77,7 +75,8 @@ public:
         if (!t.valid()) return false;
         if (t.width > kMaxWidth) return false;
 
-        build_rows(t.width);
+        RowCache g_rows;
+        build_rows(g_rows, t.width);
 
         // Luma: full resolution.
         for (int32_t row = 0; row < t.height; row++)

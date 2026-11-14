@@ -62,11 +62,9 @@ Run on the device as root:
   recam feed     feed a file, live stream, or test pattern
   recam stop     remove the hook and restore the real camera
   recam status   print state as JSON
-  recam test     run self-tests (close camera apps and stop the feeder first)
   recam watch    re-inject when cameraserver respawns
 
-These subcommands replace the old recam_* executables. Replace both recam and
-librecam.so when upgrading, then stop/re-inject the payload.
+Update recam and librecam.so together, then stop/re-inject the payload.
 The feeder accepts FLV/AVC or raw Annex-B H.264 on 127.0.0.1:27183 and plays
 /data/local/tmp/recam_source.mp4 when no live source is available.
 """
@@ -112,7 +110,9 @@ def desktop(version, target, output):
     if system == "linux":
         path = output / f"ReCam-{version}-{target}.tar.gz"
         with tarfile.open(path, "w:gz") as archive:
-            archive.add(bundle, arcname="ReCam")
+            archive.add(bundle, arcname="ReCam", filter=lambda entry:
+                        None if entry.name == "ReCam/logs" or entry.name.startswith("ReCam/logs/")
+                        else entry)
             for name in ("LICENSE", "NOTICE", "README.md", "assets/recam-preview.jpg"):
                 archive.add(ROOT / name, arcname=f"ReCam/{name}")
             entry = tarfile.TarInfo("ReCam/BUILD-INFO.json")
@@ -125,7 +125,7 @@ def desktop(version, target, output):
         with zipfile.ZipFile(path, "a" if system == "macos" else "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             if system == "windows":
                 for file in sorted(bundle.rglob("*")):
-                    if file.is_file():
+                    if file.is_file() and file.relative_to(bundle).parts[0] != "logs":
                         archive.write(file, file.relative_to(bundle).as_posix())
             for name in ("LICENSE", "NOTICE", "README.md", "assets/recam-preview.jpg"):
                 archive.write(ROOT / name, name)

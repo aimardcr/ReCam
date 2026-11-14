@@ -11,7 +11,7 @@ namespace recam {
 
 namespace {
 
-// Preserve the original 16.16 interpolation and its two truncation steps.
+// Bilinear interpolation uses 16.16 weights and two truncation steps.
 // Horizontal rows are reused across vertically adjacent destination rows.
 void resample(const SrcPlane& s, int32_t sw, int32_t sh,
               uint8_t* dst, int32_t dw, int32_t dh)

@@ -310,7 +310,7 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
             LOGE("recam_init: cleanup failed; ownership retained for shutdown retry");
         return -1;
     }
-    c->hooks_installed = 1;
+    c->hooks_installed = recam::framehook_count();
 
     // Only this extension advertises reuse; older v2 payloads leave it zero.
     auto* resident = reinterpret_cast<recam::ResidentPayload*>(
@@ -319,16 +319,6 @@ extern "C" EXPORT int recam_init(uintptr_t key, uintptr_t hookTarget)
                  reinterpret_cast<uint64_t>(&recam_init), c->generation, self_build_id()};
     LOGI("recam_init: done");
     return 0;
-}
-
-// Exercises the hook and pixel paths a live camera session never reaches.
-extern "C" EXPORT int recam_selftest(uintptr_t key)
-{
-    if (key != kInjectorKey) {
-        LOGW("recam_selftest: bad key, ignoring");
-        return -1;
-    }
-    return recam::selftest_run();
 }
 
 // Only reachable if injected into a process that has a JVM. cameraserver does not.

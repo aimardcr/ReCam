@@ -1,17 +1,20 @@
 """ReCam desktop console."""
 
 import os
+import logging
 import threading
 import time
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal, QObject
+from PySide6.QtCore import Qt, QThread, QTimer, Signal, QObject, qInstallMessageHandler
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QFileDialog, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPlainTextEdit, QPushButton,
     QRadioButton, QVBoxLayout, QWidget,
 )
 
-from .device import Device, STREAM_PORT
+from .device import Device, DeviceLogs, STREAM_PORT
+from .logging_setup import setup_logs, install_exception_logging
+from .status import lane_summary
 from .streamer import (Streamer, camera_input, ffmpeg_input,
                        list_cameras, rtmp_input, rtmp_publish_hint)
 
@@ -30,6 +33,7 @@ class Job(QObject):
         try:
             self.done.emit(True, self._fn() or "")
         except Exception as e:                      # adb and ffmpeg fail in many ways
+            logging.getLogger("recam").exception("Device operation failed")
             self.done.emit(False, str(e))
 
 
@@ -37,12 +41,14 @@ class Window(QMainWindow):
     _log_line = Signal(str)
     _cameras_found = Signal(list)
 
-    def __init__(self):
+    def __init__(self, log_directory=None, log_error=None):
         super().__init__()
         self.setWindowTitle("ReCam")
         self.resize(760, 620)
 
         self.device = None
+        self._device_logs = DeviceLogs()
+        self._logging_enabled = log_directory is not None
         self.streamer = Streamer(on_line=self._log_line.emit)
         self._thread = None
         self._job = None
@@ -54,6 +60,10 @@ class Window(QMainWindow):
         self._log_line.connect(self._log)
         self._cameras_found.connect(self._on_cameras)
         self._build()
+        if log_directory:
+            self._log(f"Logs: {log_directory}")
+        if log_error:
+            self._log(f"File logging unavailable: {log_error}")
         self.refresh_devices()
         self.rescan_cameras()
 
@@ -82,6 +92,7 @@ class Window(QMainWindow):
         self.lbl_feeder = QLabel("-")
         self.lbl_lanes = QLabel("-")
         self.lbl_rate = QLabel("-")
+        self.lbl_lanes.setWordWrap(True)
         for row, (name, w) in enumerate([("Payload", self.lbl_payload),
                                          ("Feeder", self.lbl_feeder),
                                          ("Lanes", self.lbl_lanes),
@@ -172,6 +183,7 @@ class Window(QMainWindow):
         try:
             found = list_cameras()
         except Exception:
+            logging.getLogger("recam").exception("Camera enumeration failed")
             found = []
         self._cameras_found.emit(found)
 
@@ -190,6 +202,7 @@ class Window(QMainWindow):
             target.setText(path)
 
     def _log(self, msg):
+        logging.getLogger("recam.ui").info("%s", msg)
         self.log.appendPlainText(f"{time.strftime('%H:%M:%S')}  {msg}")
 
     # ---------------------------------------------------------------- devices
@@ -211,6 +224,9 @@ class Window(QMainWindow):
                 self._log("no device selected")
             return None
         if self.device is None or self.device.serial != serial:
+            if self.device:
+                self.device.close_feeder_session()
+            self._device_logs.stop()
             self.device = Device(serial)
         return self.device
 
@@ -274,6 +290,13 @@ class Window(QMainWindow):
             return
 
         def work():
+            if self._logging_enabled:
+                self._device_logs.start(dev)
+                try:
+                    dev._run(["shell", "getprop"])
+                except Exception:
+                    logging.getLogger("recam").exception("Could not capture device properties")
+            logging.getLogger("recam").info("Starting source mode=%s device=%s", mode, dev.serial)
             out = [dev.ensure_deployed()]
             if mode == SRC_FILE:
                 out.append("pushing source to the device…")
@@ -281,25 +304,36 @@ class Window(QMainWindow):
             else:
                 dev.clear_source()
 
-            rc, _, se = dev.inject()
-            out.append(f"inject rc={rc}" + (f" {se}" if se else ""))
+            try:
+                rc, _, se = dev.inject()
+                out.append(f"inject rc={rc}" + (f" {se}" if se else ""))
 
-            dev.stop_feeder()
-            dev.start_feeder()
-            out.append("feeder started")
+                dev.stop_feeder()
+                dev.start_feeder()
+                out.append("feeder started")
 
-            if mode in (SRC_FFMPEG, SRC_RTMP, SRC_CAMERA):
-                dev.forward(STREAM_PORT)
-                out.append(f"forwarded tcp:{STREAM_PORT}")
-                if mode == SRC_FFMPEG:
-                    args = ffmpeg_input(ff_text)
-                elif mode == SRC_RTMP:
-                    args = rtmp_input()
-                    server, key = rtmp_publish_hint()
-                    out.append(f"waiting for a publisher - Server {server}, Key {key}")
-                else:
-                    args = camera_input(camera)
-                self.streamer.start(args, STREAM_PORT)
+                if mode in (SRC_FFMPEG, SRC_RTMP, SRC_CAMERA):
+                    dev.forward(STREAM_PORT)
+                    out.append(f"forwarded tcp:{STREAM_PORT}")
+                    if mode == SRC_FFMPEG:
+                        args = ffmpeg_input(ff_text)
+                    elif mode == SRC_RTMP:
+                        args = rtmp_input()
+                        server, key = rtmp_publish_hint()
+                        out.append(f"waiting for a publisher - Server {server}, Key {key}")
+                    else:
+                        args = camera_input(camera)
+                    self.streamer.start(args, STREAM_PORT)
+            except Exception:
+                # Injection may already have succeeded. Restore the camera even
+                # when feeder startup or a later desktop step fails.
+                for cleanup in (self.streamer.stop, dev.stop_feeder,
+                                dev.stop_payload, dev.remove_forward):
+                    try:
+                        cleanup()
+                    except Exception:
+                        logging.getLogger("recam").exception("Failed Start cleanup: %s", cleanup.__name__)
+                raise
             return "\n".join(out)
 
         self._start_job(work, "Start")
@@ -358,13 +392,8 @@ class Window(QMainWindow):
                                 else "not running")
 
         lanes = ring.get("lanes", [])
-        if not lanes:
-            self.lbl_lanes.setText("none - the camera is not streaming")
-        else:
-            self.lbl_lanes.setText("   ".join(
-                f"{l['width']}x{l['height']} "
-                f"{'served' if l['served'] else 'waiting'} {l['age_ms']}ms"
-                for l in lanes))
+        self.lbl_lanes.setText("; ".join(lane_summary(lane) for lane in lanes)
+                               if lanes else "No supported camera buffers observed")
 
         self._update_rate(st, ring)
 
@@ -384,14 +413,38 @@ class Window(QMainWindow):
         self._prev = (now, pub)
 
     def closeEvent(self, e):
+        if self._busy:
+            self._log("Wait for the current operation to finish before closing")
+            e.ignore()
+            return
+        self._poll.stop()
         self.streamer.stop()
-        if self.device:
-            self.device.remove_forward(STREAM_PORT)
+        try:
+            if self.device:
+                self.device.close_feeder_session()
+                self.device.remove_forward(STREAM_PORT)
+        except Exception:
+            logging.getLogger("recam").exception("Cannot remove ADB forward during exit")
+        finally:
+            self._device_logs.stop()
+        logging.getLogger("recam").info("Desktop closed")
         super().closeEvent(e)
 
 
 def main():
+    directory, error = None, None
+    try:
+        directory = setup_logs()
+    except OSError as exc:
+        error = str(exc)
+    install_exception_logging()
+    qInstallMessageHandler(lambda kind, context, message:
+                           logging.getLogger("recam.qt").info("%s: %s", kind, message))
     app = QApplication([])
-    w = Window()
+    w = Window(directory, error)
     w.show()
-    return app.exec()
+    try:
+        return app.exec()
+    finally:
+        w._device_logs.stop()
+        logging.shutdown()

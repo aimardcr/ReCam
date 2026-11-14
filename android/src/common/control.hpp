@@ -9,7 +9,7 @@ namespace recam {
 // "RECAMCTL" little-endian.
 static const uint64_t kControlMagic = 0x4C5443414D414345ULL;
 
-static const uint32_t kControlVersion = 2;   // v2 added the shm frame ring fields
+static const uint32_t kControlVersion = 2;
 
 // Name passed to PR_SET_VMA_ANON_NAME; appears in maps as "[anon:recam]".
 #define RECAM_MARKER_NAME   "recam"

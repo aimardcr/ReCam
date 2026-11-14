@@ -122,12 +122,14 @@ int recam::cli::status()
                 ageMs = (l.publishedNs >= nowAge)
                     ? 0 : static_cast<long long>((nowAge - l.publishedNs) / 1000000ull);
 
+            const char* state = recam::lane_state(l, feeder > 0, nowAge);
             printf("%s\n      { \"index\": %u, \"req_width\": %u, \"req_height\": %u, "
                    "\"width\": %u, \"height\": %u, \"served\": %s, "
-                   "\"published\": %llu, \"age_ms\": %lld }",
+                   "\"published\": %llu, \"age_ms\": %lld, \"state\": \"%s\", \"scaled\": %s }",
                    first ? "" : ",", i, l.reqWidth, l.reqHeight, l.width, l.height,
-                   yn(l.width == l.reqWidth && l.width != 0),
-                   static_cast<unsigned long long>(l.published), ageMs);
+                   yn(strcmp(state, "served") == 0),
+                   static_cast<unsigned long long>(l.published), ageMs, state,
+                   yn(recam::lane_configured(l) && (l.width != l.reqWidth || l.height != l.reqHeight)));
             first = false;
         }
         printf("%s]\n", first ? "" : "\n    ");
