@@ -247,23 +247,28 @@ bool capture_layout_apply(int64_t timestamp, const void* native, FrameTarget& t)
     if (!record.timestamp) return false;
     const auto& in = record.input;
     const auto& out = record.output;
-    if (!in.valid() || !out.valid() || out.width != t.width || out.height != t.height ||
-        handle.requestedWidth != out.width || handle.requestedHeight != out.height ||
-        handle.width != out.stride || handle.height != out.rows ||
+    // Logical capture geometry may occupy only part of the allocation.
+    // Validate the driver's full layout independently before applying metadata.
+    if (!in.valid() || !out.valid() ||
+        handle.requestedWidth != t.width || handle.requestedHeight != t.height ||
+        out.width > t.width || out.height > t.height ||
+        out.stride > handle.width || out.rows > handle.height ||
         in.width > out.width || in.height > out.height ||
         in.stride > out.stride || in.rows > out.rows) return false;
     if (t.y.pixelStride != 1 || t.cb.pixelStride != 2 || t.cr.pixelStride != 2 ||
-        t.y.rowStride != out.stride || t.cb.rowStride != out.stride || t.cr.rowStride != out.stride)
+        t.y.rowStride != handle.width || t.cb.rowStride != handle.width ||
+        t.cr.rowStride != handle.width || handle.width < t.width || handle.height < t.height)
         return false;
     const auto base = reinterpret_cast<uintptr_t>(t.y.data);
-    const uint64_t outputY = uint64_t(out.stride) * out.rows;
+    const uint64_t outputY = uint64_t(handle.width) * handle.height;
     const uint64_t inputY = uint64_t(in.stride) * in.rows;
     if (!base || qcom::field<uint64_t>(native, 84) != base ||
         outputY + outputY / 2 > handle.size || inputY + inputY / 2 > handle.size ||
         base > UINTPTR_MAX - handle.size ||
         reinterpret_cast<uintptr_t>(t.cr.data) != base + outputY ||
         reinterpret_cast<uintptr_t>(t.cb.data) != base + outputY + 1) return false;
-    if (!memcmp(&in, &out, sizeof(Geometry))) return false;
+    if (in.width == t.width && in.height == t.height &&
+        in.stride == t.y.rowStride && inputY == outputY) return false;
     t.width = in.width;
     t.height = in.height;
     t.y.rowStride = in.stride;
