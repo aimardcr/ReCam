@@ -41,6 +41,7 @@ using PFN_lockAsyncYCbCr = int32_t (*)(void* thiz, const void* handle, uint32_t 
                                        const MapperRect* bounds, AndroidYCbCr* out,
                                        int fenceFd);
 using PFN_mapperUnlock   = int32_t (*)(void* thiz, const void* handle, void* outFence);
+using PFN_mapperUnlockSync = int32_t (*)(void* thiz, const void* handle);
 
 PFN_getHardwareBuffer g_getHwb    = nullptr;
 PFN_lockPlanes        g_lockPlanes = nullptr;
@@ -51,10 +52,18 @@ bool                  g_ok         = false;
 void**             g_gbmSlot      = nullptr;  // &Singleton<GraphicBufferMapper>::sInstance
 PFN_lockAsyncYCbCr g_lockYCbCr    = nullptr;
 PFN_mapperUnlock   g_mapperUnlock = nullptr;
+PFN_mapperUnlockSync g_mapperUnlockSync = nullptr;
 bool               g_ycbcrOk      = false;
 
 // 3 << 4, the value BufferUsage and GRALLOC_USAGE_SW_WRITE_OFTEN both use.
 constexpr uint32_t kCpuWriteUsage = AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN;
+
+int32_t mapper_unlock(void* mapper, const void* handle)
+{
+    // Both variants wait for completion and close the mapper's release fence.
+    if (g_mapperUnlock) return g_mapperUnlock(mapper, handle, nullptr);
+    return g_mapperUnlockSync(mapper, handle);
+}
 
 }  // namespace
 
@@ -90,11 +99,14 @@ bool bufferlock_init()
         "_ZN7android19GraphicBufferMapper6unlockEPK13native_handle"
         "PNS_4base14unique_fd_implINS4_13DefaultCloserEEE"));
 
-    g_ycbcrOk = g_gbmSlot && g_lockYCbCr && g_mapperUnlock;
-    LOGI("bufferlock: android_ycbcr fallback %s (slot=%p lock=%p unlock=%p)",
+    g_mapperUnlockSync = reinterpret_cast<PFN_mapperUnlockSync>(dlsym(RTLD_DEFAULT,
+        "_ZN7android19GraphicBufferMapper6unlockEPK13native_handle"));
+
+    g_ycbcrOk = g_gbmSlot && g_lockYCbCr && (g_mapperUnlock || g_mapperUnlockSync);
+    LOGI("bufferlock: android_ycbcr fallback %s (slot=%p lock=%p unlock=%p unlockSync=%p)",
          g_ycbcrOk ? "available" : "UNAVAILABLE - IMPLEMENTATION_DEFINED will pass through",
          reinterpret_cast<void*>(g_gbmSlot), reinterpret_cast<void*>(g_lockYCbCr),
-         reinterpret_cast<void*>(g_mapperUnlock));
+         reinterpret_cast<void*>(g_mapperUnlock), reinterpret_cast<void*>(g_mapperUnlockSync));
     return g_ok;
 }
 
@@ -180,7 +192,7 @@ bool bufferlock_acquire_handle(const void* nativeHandle, int32_t width, int32_t 
     if (rc != 0) return false;
 
     if (!yc.y || !yc.cb || !yc.cr || !yc.ystride || !yc.cstride || !yc.chroma_step) {
-        g_mapperUnlock(gbm, nativeHandle, nullptr);
+        mapper_unlock(gbm, nativeHandle);
         return false;
     }
 
@@ -199,8 +211,7 @@ void bufferlock_release(LockedBuffer* b)
     if (!b) return;
 
     if (b->nativeHandle) {
-        // A null outFence makes the mapper wait on and close the release fence itself.
-        g_mapperUnlock(*g_gbmSlot, b->nativeHandle, nullptr);
+        mapper_unlock(*g_gbmSlot, b->nativeHandle);
         b->nativeHandle = nullptr;
         return;
     }
