@@ -16,9 +16,10 @@ Desktop source → FFmpeg → H.264 over ADB → device feeder → shared frame 
 ```
 
 The `recam` executable loads `librecam.so` into `cameraserver`. The payload replaces
-supported camera buffers before they reach the app. Decoding and scaling run in a
-separate feeder process, with four shared-memory lanes for different stream sizes.
-Camera timestamps and capture metadata are preserved.
+supported camera buffers before they reach the app. A separate feeder process
+decodes the source and prepares four shared-memory lanes for different stream sizes.
+While a new size is being prepared, the payload can scale a fresh frame from an
+existing lane. Camera timestamps and capture metadata are preserved.
 
 Live sources use H.264 in FLV over a forwarded TCP connection. Video files decode
 and loop on the device.

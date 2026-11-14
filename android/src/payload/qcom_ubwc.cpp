@@ -390,7 +390,7 @@ FrameSource* qcom_ubwc_fill(const void* native, int w, int h, int fence,
     t.cb = {g_linear.cpu + l.yBytes, int32_t(l.stride), 2};
     t.cr = {g_linear.cpu + l.yBytes + 1, int32_t(l.stride), 2};
     FrameSource* used = nullptr;
-    if (source && source->fill(t)) used = source;
+    if (source && source->snapshot(t)) used = source;
     else if (fallback && fallback->fill(t)) used = fallback;
     if (!cpu_sync(g_linear.fd, DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE) || !used) return nullptr;
 

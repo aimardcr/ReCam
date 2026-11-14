@@ -322,7 +322,7 @@ extern "C" int64_t recam_on_return_buffer(void* thiz, const void* buffer,
                              t.y.rowStride, t.y.pixelStride, t.cb.rowStride, t.cb.pixelStride,
                              t.cr.rowStride, t.cr.pixelStride);
                 }
-                else if (g_shm && g_shm->fill(t))  { filled = true; used = g_shm;  }
+                else if (g_shm && g_shm->snapshot(t))  { filled = true; used = g_shm;  }
                 else if (g_bars && g_bars->fill(t)) { filled = true; used = g_bars; }
 
                 bufferlock_release(&lb);
